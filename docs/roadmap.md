@@ -15,7 +15,7 @@ Spec milestones (docs/spec.md §Milestones) as Core v4 features. Each milestone 
 
 | Question | Status |
 | :-- | :-- |
-| Shell UI framework: React or Svelte? | **Proposed: Svelte 5** ([ADR-002](adr/ADR-002_Shell_UI_Svelte.md)). Nick approves by merging. |
+| Shell UI framework: React or Svelte? | **Decided: Svelte 5** ([ADR-002](adr/ADR-002_Shell_UI_Svelte.md), accepted by Nick 2026-11-21). |
 | Which existing vibe-coded apps migrate first, and what stack? | Open (Qz, before M3 PRD). `docs/subapp-authoring.md` lists what a migration needs. |
 | Google Drive API in v1, or the file picker? | Open; spec lists the Drive API as "Later", so M4 plans the SAF picker only. |
 | Off-site backup target for the mini PC? | Open (Theo, before `9_OPERATE`); runbook §4 has the procedure with the target left blank. |

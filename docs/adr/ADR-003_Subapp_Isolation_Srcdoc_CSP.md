@@ -1,7 +1,7 @@
 ---
 id: ADR-003
 title: Subapp isolation through srcdoc documents with a shell-injected nonce CSP
-status: Proposed
+status: Accepted
 date: 2026-11-21
 decided_by: nick
 supersedes: []

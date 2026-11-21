@@ -1,7 +1,7 @@
 ---
 id: ADR-002
 title: Svelte 5 for the shell UI
-status: Proposed
+status: Accepted
 date: 2026-11-21
 decided_by: nick
 supersedes: []

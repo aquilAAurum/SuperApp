@@ -27,7 +27,7 @@ Deferred (logged): biometric unlock (spec §Identity, optional) → M4 with the 
 
 ## 3. Workflow
 
-Follows Core `core/workflow/state-machine.md` (V4) without modification. Sprint-specific deviations, pending Nick's approval:
+Follows Core `core/workflow/state-machine.md` (V4) without modification. Sprint-specific deviations (approved by Nick, 2026-11-21):
 
 - `1_PRD`, `2_DESIGN` and `2.5_THREAT_MODEL` artifacts for both features were produced together with the build in one pass (feature docs, `THREAT_MODEL.md`) because the spec already fixes requirements and design. Janus validates them at `5_REVIEW` instead of before `3_BUILD`.
 
@@ -40,5 +40,5 @@ Follows Core `core/workflow/state-machine.md` (V4) without modification. Sprint-
 - **Functionality:** M1 and M2 acceptance criteria pass (feature docs §2.1), including the on-phone handshake timing read from Diagnostics on the debug APK.
 - **Quality:** all required checks green on the PR; D08 (Jane) and D10 (Russ) PASS.
 - **Hardening:** no open Critical/High findings; Profile §8 updated with run links.
-- **Docs:** ADR-001…003 approved or amended by Nick.
+- **Docs:** ADR-001…003 accepted by Nick (2026-11-21).
 - **Learning:** D14 filed by each delivery persona; rejected outputs logged in `docs/evals/`.

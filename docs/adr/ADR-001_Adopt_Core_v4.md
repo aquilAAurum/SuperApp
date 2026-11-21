@@ -1,7 +1,7 @@
 ---
 id: ADR-001
 title: Build the Super app under Core v4 from reimagined-bassoon, in its own repository
-status: Proposed
+status: Accepted
 date: 2026-11-21
 decided_by: nick
 core_pin: 85cb6b4ebea174008620d6b83eda5234ca52940e
@@ -22,7 +22,7 @@ supersedes: []
 | 2 | Put the **Project Profile** at the repo root (`project-profile.md`), as `core/template-repo` does. | Personas find it at a fixed path. |
 | 3 | Instantiate the template as a **pnpm monorepo** (`apps/shell`, `packages/contracts`, `packages/sdk`, `server/`, `subapps/*`, `tools/`) per the product spec. Template gates map 1:1: Step 0 → `tools/validate.mjs`; lint → flat ESLint (TS + Svelte); unit → Vitest; E2E → Playwright + axe-core; audit → `pnpm audit --prod`; dependency review; CodeQL; tag-only release with SBOM and provenance. | Keeps every Hardening Baseline gate executable (CORE-01). |
 | 4 | Encode the spec's architecture rules as **lint errors and Step 0 checks** (native plugins only in `CapabilityBroker`, server calls only in `src/server/`, subapps import only the SDK, Android permission allow-list, sandbox flags, pinned actions). | Evidence over attestation: rules that can be checked by a machine are. |
-| 5 | **HB-ELEC-*** controls are not applicable (platform is Capacitor/Android WebView). Their intent is covered by Profile constraints SA-C3 and SA-C6, the shell CSP, and Step 0 manifest checks, listed in the Profile's hardening table. This is a mapping, not a relaxation. | CORE precedence: a Profile may not relax a Core rule without an ADR; this ADR records the mapping for Nick's approval. |
+| 5 | **HB-ELEC-*** controls are not applicable (platform is Capacitor/Android WebView). Their intent is covered by Profile constraints SA-C3 and SA-C6, the shell CSP, and Step 0 manifest checks, listed in the Profile's hardening table. This is a mapping, not a relaxation. | CORE precedence: a Profile may not relax a Core rule without an ADR; Nick approved this mapping on 2026-11-21. |
 | 6 | Feature IDs use `SA-YYYY-NNN`. Spec milestones M1–M6 map to features SA-2026-001…006 (see `docs/roadmap.md`). | Matches the Core feature template. |
 | 7 | The supplied product spec is committed verbatim as `docs/spec.md`. | Core forbids references to unversioned external documents. |
 
