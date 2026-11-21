@@ -46,6 +46,7 @@ Everything product-specific lives here; Core personas read these values. A Profi
 | Bridge API contract | `packages/contracts/src/methods.ts`, `envelope.ts`, `manifest.ts`, `errors.ts` |
 | Data model | `server/pb_migrations/` (schema v1 = `schema_info.version` 1) |
 | Server write path | `server/pb_hooks/lib/ops.js` (+ `ops.pb.js` route) |
+| Client sync | `apps/shell/src/sync/` (store, data service, worker, resolve, engine) |
 | Architecture decisions | `docs/adr/` |
 
 ## 5. Data Inventory (HB-DATA-01; Priya)
@@ -57,7 +58,7 @@ Everything product-specific lives here; Core personas read these values. A Profi
 | Server URL, theme, safe-mode flag | Settings | Phone: Capacitor Preferences | Until changed | Non-sensitive |
 | Device record (name, model-derived name, capabilities, lastSeen) | Device registry for cross-device bus | PocketBase `core_devices` | Until removed | Owner-only API rules |
 | Shell logs, bridge inspector, rejected-call log | Diagnostics | Phone memory (ring buffers, 500–1000 entries) | Session | Secrets/URLs redacted (`logger.ts`); export to `diagnostics` arrives in M5 |
-| People, files, tags, settings, notifications, messages (synced) | Shared core data for subapps | PocketBase (canonical) + phone SQLite mirror (M3) | Soft delete → hard delete after 30 days | Owner-only reads; writes only via ops route |
+| People, files, tags, settings, notifications, messages, app collections (synced) | Shared core and app data | PocketBase (canonical) + phone mirror and outbox (M3) | Soft delete → hard delete after 30 days; outbox rows removed when confirmed | Owner-only reads; writes only via ops route; phone copy in **SQLCipher-encrypted SQLite** with a Keystore-held key (ADR-004) |
 | Integration tokens (Home Assistant, Jellyfin, Anthropic) | Server-side proxies | PocketBase `core_integrations.secret` (hidden field, null API rules) | Until rotated | **Never sent to the phone** (integration test asserts it) |
 | Contacts, location (M4) | Subapp features with consent | Phone + mini PC only | Per feature | Consent per app; logged access |
 
@@ -81,20 +82,20 @@ Everything product-specific lives here; Core personas read these values. A Profi
 
 ## 8. Hardening Status (against Core `core/governance/hardening-baseline.md`)
 
-Status is honest as of Sprint 1; "Wired" means the gate exists in CI but has not yet produced a green run on GitHub.
+Status as of Sprint 1. "Wired" = gate exists in CI; "Green in CI" = it has passed on the working branch (run links go in the PR Evidence Bundle).
 
 | HB-ID | Status | Evidence / Note |
 | :--- | :--- | :--- |
 | HB-QUAL-01 Lint | Wired | `eslint.config.js` (flat, TS + Svelte) |
-| HB-QUAL-02 Unit tests | Wired | Vitest: contracts, SDK, router, handshake, lifecycle, sandbox, ops logic, packer |
-| HB-QUAL-03 Hermetic E2E | Wired | `apps/shell/tests/e2e` (PocketBase mocked with `page.route`) |
+| HB-QUAL-02 Unit tests | Green in CI | Vitest: contracts, SDK, router, handshake, lifecycle, sandbox, sync, ops logic, packer |
+| HB-QUAL-03 Hermetic E2E | Green in CI | `apps/shell/tests/e2e` (PocketBase mocked with `page.route`; ops answered by the real `ops.js`) |
 | HB-QUAL-04 Step 0 | Wired | `tools/validate.mjs` |
 | HB-QUAL-05 Type checking | Wired | `tsc` / `svelte-check --fail-on-warnings` |
 | HB-A11Y-01 axe-core | Wired | E2E scans setup, launcher, diagnostics, settings |
 | HB-A11Y-02 Input traversal | Open | Touch-first; D-pad traversal test arrives with the TV shell |
-| HB-SEC-01 SAST | Wired | `codeql.yml` |
+| HB-SEC-01 SAST | **Blocked by repo setting** | `codeql.yml` analyses all files but SARIF upload fails until code scanning is enabled (Nick) |
 | HB-SEC-02 Secret scanning | **Manual (Nick)** | Repo setting |
-| HB-SEC-03 Threat model | Done for M1–M2 | `THREAT_MODEL.md` |
+| HB-SEC-03 Threat model | Done for M1–M3 | `THREAT_MODEL.md` |
 | HB-SEC-04 No HTML sinks | Wired | ESLint `no-restricted-syntax`, `svelte/no-at-html-tags` |
 | HB-SEC-05 SECURITY.md | Done | `SECURITY.md` |
 | HB-SUP-01 Pinned actions | Done | Step 0 checks every `uses:` is a 40-char SHA |
@@ -105,7 +106,7 @@ Status is honest as of Sprint 1; "Wired" means the gate exists in CI but has not
 | HB-SUP-06/07 SBOM, provenance | Wired | `release.yml` |
 | HB-ELEC-* | N/A | Platform is Capacitor, not Electron. The WebView analogues are SA-C3, SA-C6, Step 0 manifest checks and the shell CSP (THREAT_MODEL T-07). |
 | HB-DATA-01 Inventory | Done | §5 |
-| HB-DATA-02 Encryption at rest | Partial | Tokens in Keystore. SQLite mirror encryption decided in M3. Backups encrypted off-box (runbook). |
+| HB-DATA-02 Encryption at rest | Done on device (pending D10 check) | Tokens in Keystore; mirror/outbox SQLCipher (ADR-004). Backups encrypted off-box (runbook). |
 | HB-DATA-03 No secrets in logs | Wired | `logger.ts` redaction + unit test |
 | HB-REL-01 Tag-only builds | Wired | `release.yml` |
 | HB-REL-02 Signing | Wired, keystore pending | Secrets in `release` environment (manual) |

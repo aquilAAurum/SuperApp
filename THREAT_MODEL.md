@@ -1,6 +1,6 @@
-# Threat Model: Shell, bridge and server core — SA-2026-001 / SA-2026-002 (Doc ID D04)
+# Threat Model: Shell, bridge, server core and sync — SA-2026-001…003 (Doc ID D04)
 
-Owner: Mara (Security Engineer). Data-inventory review: Priya. Template: Core `core/governance/comm-templates.md` §2. Covers milestones M1–M2; each later milestone appends its new surface before `3_BUILD` (HB-SEC-03).
+Owner: Mara (Security Engineer). Data-inventory review: Priya. Template: Core `core/governance/comm-templates.md` §2. Covers milestones M1–M3; each later milestone appends its new surface before `3_BUILD` (HB-SEC-03).
 
 ## A. Scope
 
@@ -13,6 +13,7 @@ Owner: Mara (Security Engineer). Data-inventory review: Priya. Template: Core `c
 | Ops write path | `POST /api/sa/ops` (auth required) | M1 |
 | PocketBase collections | API rules in `server/pb_migrations/1763740800_core_collections.js` | M1 |
 | Device secrets | Keystore-backed secure storage (token, device id) | M2 |
+| Local mirror + outbox | Encrypted SQLite (Android), IndexedDB (web); `data.*` bridge methods; catch-up and realtime from PocketBase | M3 |
 | Android | Permissions `INTERNET`, `ACCESS_NETWORK_STATE`; no exported components except the launcher activity | M2 |
 
 ## B. Data Flow & Trust Boundaries
@@ -48,10 +49,15 @@ Boundaries crossed: B1 iframe → shell (every message validated on the shell si
 | T-12 | Info disclosure | Integration secrets reach the phone | L | H | Medium | `core_integrations` has null API rules and a hidden `secret` field; only hooks read it | integration "integration secrets are never readable by clients" |
 | T-13 | Info disclosure | Tokens copied off the device via Android backup / device transfer | L | H | Medium | Keystore-backed storage; `allowBackup=false`; data-extraction rules exclude all domains | Step 0 "Android backups disabled" |
 | T-14 | DoS | A subapp hangs on start or leaks iframes | M | L | Low | 10 s start timeout → `crashed`; max 3 suspended iframes (LRU destroy); explicit destroy path (CORE-15) | unit `lifecycle.test.ts` (timeout, LRU, destroyAll); e2e "app.close destroys the iframe" |
+| T-15 | Tampering / Elevation | Subapp writes to another app's or a core collection through `data.*` | M | H | **High** | Router resolves scope from the collection: own prefix → `data.own` **and** listed in manifest `collections`; `core_*` → `core.<x>.write`; anything else denied. Server re-checks ownership and synced-collection status | unit `router.test.ts` SCOPE_DENIED cases; integration "app collections are synced" |
+| T-16 | Info disclosure | Phone lost or backed up: synced personal data read from disk | L | H | Medium | SQLCipher database, Keystore-held random passphrase, `allowBackup=false` (ADR-004) | Step 0 (backup off); manual check on device (D10) |
+| T-17 | Integrity | Offline edits silently overwrite newer server data | M | H | **High** | `baseVersion` fixed at enqueue; server 409 → conflict row, server wins in mirror, owner decides; rebase uses a new opId | unit `sync.test.ts` conflict cases; e2e "a forced version conflict appears in Needs attention" |
+| T-18 | Repudiation / integrity | Crash between server apply and local commit duplicates or loses writes | M | H | **High** | Outbox in the durable store, mirror + outbox in one commit, opId replay | unit "killing the shell mid-sync"; e2e "killing the app mid-sync loses nothing" |
+| T-19 | DoS | A subapp floods writes and fills the outbox | L | M | Low | 50 req/s bridge limit per app; SDK backs off on `RATE_LIMITED` | unit `router.test.ts`, `sdk.test.ts` |
 
 ## D. Data Inventory Delta (Priya)
 
-See [`project-profile.md` §5](project-profile.md). New in M1–M2: server token and device id (Keystore), `core_devices` row, in-memory diagnostics buffers, `processed_ops` ledger (30-day retention, no payload beyond the op result).
+See [`project-profile.md` §5](project-profile.md). New in M3: encrypted local mirror and outbox of synced records (Android), IndexedDB copy in browser builds. New in M1–M2: server token and device id (Keystore), `core_devices` row, in-memory diagnostics buffers, `processed_ops` ledger (30-day retention, no payload beyond the op result).
 
 ## E. Residual Risk & Sign-off
 
