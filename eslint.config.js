@@ -28,7 +28,8 @@ export default tseslint.config(
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
-  ...svelte.configs['flat/recommended'],
+  // Svelte rules only for Svelte files (some crash on CommonJS/script sources such as PocketBase hooks).
+  ...svelte.configs['flat/recommended'].map((c) => ({ ...c, files: c.files ?? ['**/*.svelte', '**/*.svelte.ts'] })),
   {
     languageOptions: { ecmaVersion: 2023, sourceType: 'module', globals: { ...globals.browser, ...globals.node } },
     rules: {
@@ -40,12 +41,12 @@ export default tseslint.config(
       'prefer-const': 'error',
       'no-restricted-syntax': ['error', ...XSS_SINKS],
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', caughtErrors: 'none' }],
-      'svelte/no-at-html-tags': 'error', // HB-SEC-04 in Svelte templates
     },
   },
   {
     files: ['**/*.svelte'],
     languageOptions: { parserOptions: { parser: tseslint.parser, extraFileExtensions: ['.svelte'] } },
+    rules: { 'svelte/no-at-html-tags': 'error' }, // HB-SEC-04 in Svelte templates
   },
   // Spec implementation note 2: native plugins only inside the CapabilityBroker; server SDK only in src/server/.
   {
@@ -91,7 +92,7 @@ export default tseslint.config(
       sourceType: 'script',
       globals: { migrate: 'readonly', Collection: 'readonly', Record: 'readonly', routerAdd: 'readonly', onRecordUpdate: 'readonly', onRecordCreate: 'readonly', onRecordUpdateRequest: 'readonly', onRecordCreateRequest: 'readonly', cronAdd: 'readonly', $app: 'readonly', $apis: 'readonly', $security: 'readonly', $os: 'readonly', __hooks: 'readonly', DynamicModel: 'readonly', BadRequestError: 'readonly', NotFoundError: 'readonly', ForbiddenError: 'readonly', ApiError: 'readonly', module: 'writable', require: 'readonly', toString: 'readonly' },
     },
-    rules: { '@typescript-eslint/no-require-imports': 'off' },
+    rules: { '@typescript-eslint/no-require-imports': 'off', '@typescript-eslint/triple-slash-reference': 'off' },
   },
   {
     files: ['**/*.test.{ts,mjs,js}', '**/tests/**/*.{ts,mjs,js}', 'tools/**/*.mjs', '**/*.config.{ts,js}'],
