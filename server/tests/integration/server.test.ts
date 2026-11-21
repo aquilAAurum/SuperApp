@@ -52,6 +52,17 @@ describe('device registration (core_devices)', () => {
   });
 });
 
+describe('app collections (hello_notes)', () => {
+  it('are synced: written through ops, versioned, unreachable directly', async () => {
+    const id = rid();
+    const r = await api('/api/sa/ops', { token: user, body: { opId: opId(), collection: 'hello_notes', recordId: id, op: 'create', payload: { text: 'hi', n: 1 } } });
+    expect(r.status).toBe(200);
+    expect(r.body.record).toMatchObject({ id, version: 1, deleted: false });
+    const direct = await api('/api/collections/hello_notes/records', { token: user, body: { text: 'x', owner: userId, version: 1 } });
+    expect(direct.status).toBe(403);
+  });
+});
+
 describe('POST /api/sa/ops (version + idempotency hooks)', () => {
   it('same opId twice → one record (M1 acceptance)', async () => {
     const id = rid();
@@ -101,8 +112,11 @@ describe('access rules', () => {
   it('integration secrets are never readable by clients', async () => {
     const c = await api('/api/collections/core_integrations/records', { token: su, body: { kind: 'anthropic', baseUrl: 'https://api.example.test', secret: 'sk-test-secret' } });
     expect(c.status).toBe(200);
-    expect(JSON.stringify(c.body)).not.toContain('sk-test-secret');
-    const asUser = await api('/api/collections/core_integrations/records', { token: user });
-    expect(asUser.status).toBe(403);
+    // Superusers (admin UI on the mini PC) may see hidden fields; the phone only ever holds the owner's token.
+    const list = await api('/api/collections/core_integrations/records', { token: user });
+    expect(list.status).toBe(403);
+    const view = await api(`/api/collections/core_integrations/records/${c.body.id}`, { token: user });
+    expect(view.status).toBeGreaterThanOrEqual(403);
+    expect(JSON.stringify([list.body, view.body])).not.toContain('sk-test-secret');
   });
 });
