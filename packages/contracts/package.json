@@ -1,0 +1,24 @@
+{
+  "name": "@superapp/contracts",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Bridge API v1 contract: envelope, methods, scopes, manifest and error codes. Source of truth for the SDK, shell validation and server rules.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "ajv": "^8.20.0",
+    "semver": "^7.8.6"
+  },
+  "devDependencies": {
+    "@types/semver": "^7.7.1"
+  }
+}
