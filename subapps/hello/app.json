@@ -1,0 +1,15 @@
+{
+  "id": "hello",
+  "name": "Hello",
+  "version": "1.0.0",
+  "sdk": ">=1.0 <2.0",
+  "entry": "index.html",
+  "formFactors": ["phone", "tablet", "tv", "desktop"],
+  "scopes": { "required": [], "optional": [] },
+  "collections": [],
+  "events": { "emits": [], "listens": [] },
+  "deepLinks": [],
+  "intents": [],
+  "car": null,
+  "background": { "tasks": [] }
+}
