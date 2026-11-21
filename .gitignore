@@ -1,0 +1,16 @@
+node_modules/
+dist/
+build/
+coverage/
+test-results/
+playwright-report/
+.env
+*.keystore
+*.jks
+server/pb_data/
+server/bin/
+apps/shell/android/app/build/
+apps/shell/android/.gradle/
+apps/shell/android/local.properties
+apps/shell/public/builtin/
+subapps/*/release/

@@ -1,0 +1,32 @@
+{
+  "name": "superapp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Personal Android super app: shell, subapp SDK and PocketBase server core. Built under Core v4 (aquilAAurum/reimagined-bassoon).",
+  "license": "UNLICENSED",
+  "type": "module",
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "validate": "node tools/validate.mjs",
+    "lint": "eslint .",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "test": "vitest run",
+    "build": "pnpm --filter @superapp/sdk build && pnpm --filter @superapp/sdk size && pnpm --filter @superapp/shell build",
+    "test:e2e": "pnpm --filter @superapp/shell test:e2e",
+    "check": "pnpm validate && pnpm lint && pnpm typecheck && pnpm test"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "~10.14.0",
+    "eslint-plugin-svelte": "^3.24.1",
+    "globals": "^17.13.0",
+    "svelte": "^5.59.1",
+    "svelte-eslint-parser": "^1.10.1",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.73.0",
+    "vitest": "^5.1.1"
+  }
+}
