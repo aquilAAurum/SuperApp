@@ -5,12 +5,13 @@
   import Home from './ui/Home.svelte';
   import Diagnostics from './ui/Diagnostics.svelte';
   import Settings from './ui/Settings.svelte';
+  import SyncCentre from './ui/SyncCentre.svelte';
   import Toasts from './ui/Toasts.svelte';
   import { showToast } from './ui/store.ts';
 
   const { shell }: { shell: Shell } = $props();
 
-  type View = 'loading' | 'setup' | 'home' | 'app' | 'diagnostics' | 'settings';
+  type View = 'loading' | 'setup' | 'home' | 'app' | 'diagnostics' | 'settings' | 'sync';
   let view = $state<View>('loading');
   let activeApp = $state<string | null>(null);
   let host: HTMLElement;
@@ -94,6 +95,8 @@
       <Setup {shell} onDone={() => (view = 'home')} />
     {:else if view === 'home'}
       <Home {shell} onOpen={open} onNavigate={(v) => (view = v)} />
+    {:else if view === 'sync'}
+      <SyncCentre {shell} onBack={() => (view = 'home')} />
     {:else if view === 'diagnostics'}
       <Diagnostics {shell} onBack={() => (view = 'home')} />
     {:else if view === 'settings'}

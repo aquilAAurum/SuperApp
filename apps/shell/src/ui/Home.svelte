@@ -1,15 +1,17 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import type { Shell } from '../shell.ts';
-  import { syncStatus } from '../shell.ts';
   import type { AppStatus } from '../host/lifecycle.ts';
 
-  const { shell, onOpen, onNavigate }: { shell: Shell; onOpen: (id: string) => void; onNavigate: (v: 'diagnostics' | 'settings') => void } = $props();
+  const { shell, onOpen, onNavigate }: { shell: Shell; onOpen: (id: string) => void; onNavigate: (v: 'diagnostics' | 'settings' | 'sync') => void } = $props();
   // `shell` is a constant composition root and is never reassigned.
   // svelte-ignore state_referenced_locally
   const shellState = shell.state;
+  // svelte-ignore state_referenced_locally
+  const syncState = shell.sync.status;
   let statuses = $state<readonly AppStatus[]>([]);
-  const sync = $derived(syncStatus($shellState.reachability));
+  // Spec §Home launcher: Synced, Pending (n), Offline, Error.
+  const syncLabel = $derived($syncState.label === 'Pending' ? `Pending (${$syncState.queued})` : $syncState.label);
 
   onMount(() => {
     void shell.refreshReachability();
@@ -26,9 +28,9 @@
 
 <header class="bar">
   <h1>Super app</h1>
-  <p class="sync" data-testid="sync-status" data-state={sync.label} title={sync.detail}>
-    <span class="dot" aria-hidden="true"></span>{sync.label}
-  </p>
+  <button type="button" class="sync" data-testid="sync-status" data-state={$syncState.label} onclick={() => onNavigate('sync')} aria-label={`Sync status: ${syncLabel}. ${$syncState.detail} Open Sync centre.`}>
+    <span class="dot" aria-hidden="true"></span>{syncLabel}
+  </button>
 </header>
 
 {#if $shellState.safeMode}
@@ -62,6 +64,7 @@
 </section>
 
 <nav class="section actions" aria-label="Shell">
+  <button type="button" onclick={() => onNavigate('sync')}>Sync centre</button>
   <button type="button" onclick={() => onNavigate('diagnostics')}>Diagnostics</button>
   <button type="button" onclick={() => onNavigate('settings')}>Settings</button>
 </nav>
@@ -89,7 +92,6 @@
     display: flex;
     align-items: center;
     gap: var(--space-2);
-    margin: 0;
     font-size: var(--font-size-sm);
   }
   .dot {
@@ -100,6 +102,9 @@
   }
   .sync[data-state='Synced'] .dot {
     background: var(--color-success);
+  }
+  .sync[data-state='Pending'] .dot {
+    background: var(--color-warning);
   }
   .sync[data-state='Error'] .dot {
     background: var(--color-danger);
@@ -155,6 +160,7 @@
   }
   .actions {
     display: flex;
+    flex-wrap: wrap;
     gap: var(--space-3);
   }
 </style>
