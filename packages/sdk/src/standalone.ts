@@ -52,6 +52,8 @@ export class StandaloneTransport implements Transport {
         return { record: rec, pending: false };
       },
       'data.delete': (p) => ({ deleted: table(p.collection).delete(String(p.id)), pending: false }),
+      'data.subscribe': () => ({ subscriptionId: 'standalone' }),
+      'data.unsubscribe': () => ({ ok: true }),
       ...overrides,
     };
   }
@@ -71,6 +73,10 @@ export class StandaloneTransport implements Transport {
   }
 
   send(req: RequestEnvelope): void {
+    if (['data.create', 'data.update', 'data.delete'].includes(req.method)) {
+      const collection = req.params.collection;
+      queueMicrotask(() => queueMicrotask(() => this.listeners.forEach((l) => l({ v: ENVELOPE_VERSION, kind: 'evt', topic: 'data.changed', payload: { collection }, ts: new Date().toISOString() }))));
+    }
     const reply = (res: ResponseEnvelope) => queueMicrotask(() => this.listeners.forEach((l) => l(res)));
     const handler = this.handlers[req.method];
     if (!handler) {

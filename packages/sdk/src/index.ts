@@ -39,6 +39,13 @@ export interface SuperApp {
     create<T = Record<string, unknown>>(collection: string, data: Record<string, unknown>, id?: string): Promise<{ record: T; pending: boolean }>;
     update<T = Record<string, unknown>>(collection: string, id: string, data: Record<string, unknown>, baseVersion?: number): Promise<{ record: T; pending: boolean }>;
     delete(collection: string, id: string): Promise<{ pending: boolean }>;
+    /**
+     * Local results immediately, then again whenever the collection changes (server confirmation,
+     * catch-up, realtime, or another app's write). Returns an unsubscribe function.
+     */
+    subscribe<T = Record<string, unknown>>(collection: string, onItems: (items: T[]) => void, q?: { filter?: string; sort?: string }): Promise<() => void>;
+    /** A write from this app was dead-lettered or conflicted; the owner resolves it in the Sync centre. */
+    onSyncFailed(handler: (e: { collection: string; recordId: string; status: 'dead' | 'conflict'; error: string | null }) => void): () => void;
   };
 }
 
@@ -85,6 +92,27 @@ export function connect(opts: ConnectOptions): SuperApp {
       create: (collection, data, id) => call('data.create', id ? { collection, data, id } : { collection, data }),
       update: (collection, id, data, baseVersion) => call('data.update', baseVersion ? { collection, id, data, baseVersion } : { collection, id, data }),
       delete: (collection, id) => call('data.delete', { collection, id }),
+      subscribe: async <T,>(collection: string, onItems: (items: T[]) => void, q: { filter?: string; sort?: string } = {}) => {
+        const load = async () => onItems((await call<{ items: T[] }>('data.list', { collection, ...q, perPage: 500 })).items);
+        // Coalesce bursts of change events (e.g. 100 writes) into one reload.
+        let timer: ReturnType<typeof setTimeout> | null = null;
+        const off = client.onEvent('data.changed', (p) => {
+          if ((p as { collection?: string }).collection !== collection) return;
+          if (timer) clearTimeout(timer);
+          timer = setTimeout(() => {
+            timer = null;
+            void load().catch(() => undefined);
+          }, 50);
+        });
+        const { subscriptionId } = await call<{ subscriptionId: string }>('data.subscribe', { collection });
+        await load();
+        return () => {
+          if (timer) clearTimeout(timer);
+          off();
+          void call('data.unsubscribe', { subscriptionId }).catch(() => undefined);
+        };
+      },
+      onSyncFailed: (handler) => client.onEvent('data.sync_failed', (p) => handler(p as Parameters<typeof handler>[0])),
     },
   };
 

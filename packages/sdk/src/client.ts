@@ -117,7 +117,19 @@ export class BridgeClient {
     return this.transport.hosted;
   }
 
+  /** RATE_LIMITED is retryable: back off and retry a few times before surfacing it (spec: 50 req/s per app). */
   async call<T = unknown>(method: string, params: Record<string, unknown> = {}, opts: CallOptions = {}): Promise<T> {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await this.callOnce<T>(method, params, opts);
+      } catch (err) {
+        if (!(err instanceof BridgeError) || err.code !== 'RATE_LIMITED' || attempt >= 5) throw err;
+        await new Promise((r) => setTimeout(r, 100 * 2 ** attempt));
+      }
+    }
+  }
+
+  private async callOnce<T>(method: string, params: Record<string, unknown>, opts: CallOptions): Promise<T> {
     await this.ready;
     const id = newId();
     const timeoutMs = opts.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;

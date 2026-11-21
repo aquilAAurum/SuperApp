@@ -79,6 +79,23 @@ describe('BridgeClient', () => {
     expect(seen).toEqual([1]);
   });
 
+  it('retries RATE_LIMITED with backoff, then succeeds', async () => {
+    vi.useFakeTimers();
+    try {
+      const t = new FakeTransport();
+      const c = new BridgeClient(t);
+      const p = c.call('app.getContext');
+      await vi.advanceTimersByTimeAsync(0);
+      t.deliver({ v: 1, id: t.sent[0]!.id, kind: 'res', ok: false, error: { code: 'RATE_LIMITED', message: 'slow down', retryable: true } });
+      await vi.advanceTimersByTimeAsync(150);
+      expect(t.sent).toHaveLength(2);
+      t.deliver({ v: 1, id: t.sent[1]!.id, kind: 'res', ok: true, result: 'ok' });
+      await expect(p).resolves.toBe('ok');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('ignores malformed messages', async () => {
     const t = new FakeTransport();
     new BridgeClient(t);
@@ -96,5 +113,19 @@ describe('standalone mode', () => {
     const list = await sa.data.list('demo_items');
     expect(list.items).toHaveLength(1);
     await expect(sa.call('device.contacts.list')).rejects.toMatchObject({ code: 'UNAVAILABLE' });
+  });
+});
+
+describe('data.subscribe (standalone)', () => {
+  it('delivers current items immediately and again after a write', async () => {
+    const sa = connect({ appId: 'demo', transport: new StandaloneTransport('demo'), captureErrors: false });
+    const seen: number[] = [];
+    const off = await sa.data.subscribe('demo_items', (items) => seen.push(items.length));
+    await sa.data.create('demo_items', { n: 1 });
+    await new Promise((r) => setTimeout(r, 80));
+    off();
+    await sa.data.create('demo_items', { n: 2 });
+    await new Promise((r) => setTimeout(r, 80));
+    expect(seen).toEqual([0, 1]);
   });
 });
