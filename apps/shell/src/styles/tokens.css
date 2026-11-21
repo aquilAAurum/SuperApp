@@ -1,0 +1,81 @@
+/*
+ * Design tokens v1.0.0 (CORE-21). All shell styling uses these custom properties; hard-coded
+ * values are prohibited outside this file. Named by role, not appearance.
+ */
+:root {
+  --color-bg: #f6f7f9;
+  --color-surface: #ffffff;
+  --color-surface-raised: #eef0f4;
+  --color-text: #15181e;
+  --color-text-muted: #5a6270;
+  --color-border: #d5d9e0;
+  --color-accent: #2952cc;
+  --color-accent-text: #ffffff;
+  --color-danger: #b3261e;
+  --color-success: #1e7a3d;
+  --color-warning: #8a5a00;
+  --color-focus: #2952cc;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+
+  --font-body: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, 'Roboto Mono', monospace;
+  --font-size-sm: 0.875rem;
+  --font-size-md: 1rem;
+  --font-size-lg: 1.25rem;
+  --font-size-xl: 1.5rem;
+
+  --focus-ring: 3px solid var(--color-focus);
+  --tap-target: 48px;
+  --header-height: 56px;
+  --tile-size: 88px;
+  --motion-duration: 0.2s;
+  --shadow-raised: 0 1px 3px rgb(0 0 0 / 0.12);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --color-bg: #101216;
+    --color-surface: #191c22;
+    --color-surface-raised: #232730;
+    --color-text: #eceef2;
+    --color-text-muted: #a3aab6;
+    --color-border: #343944;
+    --color-accent: #8fa8ff;
+    --color-accent-text: #0b1330;
+    --color-danger: #ffb4ab;
+    --color-success: #7dd99a;
+    --color-warning: #f2c46b;
+    --color-focus: #8fa8ff;
+  }
+}
+
+:root[data-theme='dark'] {
+  --color-bg: #101216;
+  --color-surface: #191c22;
+  --color-surface-raised: #232730;
+  --color-text: #eceef2;
+  --color-text-muted: #a3aab6;
+  --color-border: #343944;
+  --color-accent: #8fa8ff;
+  --color-accent-text: #0b1330;
+  --color-danger: #ffb4ab;
+  --color-success: #7dd99a;
+  --color-warning: #f2c46b;
+  --color-focus: #8fa8ff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-duration: 0s;
+  }
+}
