@@ -9,6 +9,10 @@ const config: CapacitorConfig = {
     webContentsDebuggingEnabled: false,
     allowMixedContent: false,
   },
+  plugins: {
+    // Sync mirror + outbox are stored in an SQLCipher-encrypted database (ADR-004).
+    CapacitorSQLite: { androidIsEncryption: true },
+  },
   server: {
     androidScheme: 'https',
     // Top-level navigation stays inside the shell; external URLs open via the launcher (M4).

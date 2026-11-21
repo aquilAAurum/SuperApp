@@ -11,7 +11,9 @@ import { Device } from '@capacitor/device';
 import { Network } from '@capacitor/network';
 import { Preferences } from '@capacitor/preferences';
 import { SecureStorage } from '@aparajita/capacitor-secure-storage';
+import { CapacitorSQLite, SQLiteConnection } from '@capacitor-community/sqlite';
 import type { Capabilities, FormFactor } from '@superapp/contracts';
+import type { SqlDatabase } from '../sync/sqlite-kv.ts';
 
 export interface DeviceSummary {
   name: string;
@@ -124,5 +126,32 @@ export class CapabilityBroker {
 
   async setPref(key: string, value: string): Promise<void> {
     await Preferences.set({ key, value });
+  }
+
+  /**
+   * Opens the encrypted on-device SQLite database for the sync mirror and outbox (ADR-004,
+   * HB-DATA-02). The passphrase is random, generated once, and held by the plugin in Android
+   * Keystore-backed storage; it never leaves the device. Returns null on web (IndexedDB is used).
+   */
+  async openDatabase(name = 'superapp'): Promise<SqlDatabase | null> {
+    if (!this.isNative) return null;
+    const sqlite = new SQLiteConnection(CapacitorSQLite);
+    if (!(await sqlite.isSecretStored()).result) {
+      const bytes = crypto.getRandomValues(new Uint8Array(32));
+      await sqlite.setEncryptionSecret(Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join(''));
+    }
+    const consistent = (await sqlite.checkConnectionsConsistency()).result;
+    const exists = (await sqlite.isConnection(name, false)).result;
+    const db = consistent && exists ? await sqlite.retrieveConnection(name, false) : await sqlite.createConnection(name, true, 'secret', 1, false);
+    await db.open();
+    return {
+      execute: async (sql) => {
+        await db.execute(sql, false);
+      },
+      query: async <T>(sql: string, values: unknown[] = []) => ((await db.query(sql, values)).values ?? []) as T[],
+      executeSet: async (set) => {
+        await db.executeSet(set.map((x) => ({ statement: x.statement, values: x.values })), true);
+      },
+    };
   }
 }

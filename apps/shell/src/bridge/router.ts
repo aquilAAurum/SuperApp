@@ -24,6 +24,8 @@ export interface RouterOptions {
   handlers: Partial<Record<MethodName, Handler>>;
   ratePerSecond?: number;
   now?: () => number;
+  /** Called after a session ends (subscriptions are dropped there). */
+  onDetach?: (appId: string) => void;
 }
 
 /**
@@ -61,6 +63,7 @@ export class BridgeRouter {
     this.sessions.delete(appId);
     this.limiter.forget(appId);
     this.opts.logger.info('bridge.session_ended', { appId, reason });
+    this.opts.onDetach?.(appId);
     return true;
   }
 

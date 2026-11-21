@@ -16,6 +16,12 @@ import { CapabilityBroker } from './native/CapabilityBroker.ts';
 import { ServerClient, type Reachability, type SignedInUser } from './server/ServerClient.ts';
 import { writable, type Writable } from './ui/store.ts';
 import type { Handler, PortLike } from './bridge/types.ts';
+import { SyncEngine } from './sync/engine.ts';
+import { dataHandlers } from './sync/handlers.ts';
+import { DeferredKv, type KvBackend } from './sync/kv.ts';
+import { IndexedDbKv } from './sync/idb-kv.ts';
+import { SqliteKv } from './sync/sqlite-kv.ts';
+import { showToast } from './ui/store.ts';
 
 export const SHELL_VERSION = __SHELL_VERSION__;
 
@@ -49,6 +55,8 @@ export class Shell {
   onAppClosed: (appId: string) => void = () => undefined;
 
   private readonly handlers: Partial<Record<MethodName, Handler>>;
+  readonly sync: SyncEngine;
+  private realtime = new Map<string, () => Promise<void>>();
   readonly router: BridgeRouter;
   readonly handshake: HandshakeGuard;
   readonly lifecycle: SubappLifecycle;
@@ -76,7 +84,22 @@ export class Shell {
       markReady: (appId) => log.info('subapp.ready', { appId }),
       route: () => '/',
     });
-    this.router = new BridgeRouter({ logger: log, grants: this.grants, handlers: this.handlers });
+    const kv: Promise<KvBackend> = this.broker.openDatabase().then((db) => (db ? new SqliteKv(db) : new IndexedDbKv()));
+    this.sync = new SyncEngine({
+      kv: new DeferredKv(kv),
+      server: this.server,
+      logger: log,
+      emit: (appId, topic, payload) => void this.router.emit(appId, topic, payload),
+      deviceId: () => this.state.get().deviceId,
+      onAuthError: () => void this.recoverAuth(),
+    });
+    Object.assign(this.handlers, dataHandlers(this.sync));
+    this.router = new BridgeRouter({
+      logger: log,
+      grants: this.grants,
+      handlers: this.handlers,
+      onDetach: (appId) => this.sync.dropApp(appId),
+    });
     this.handshake = new HandshakeGuard({
       router: this.router,
       createChannel: () => {
@@ -145,6 +168,7 @@ export class Shell {
     this.state.update((s) => ({ ...s, user, deviceId }));
     void this.refreshReachability();
     void this.server.heartbeat(deviceId);
+    this.startSync();
     return 'home';
   }
 
@@ -163,6 +187,58 @@ export class Shell {
     await this.broker.setPref('serverUrl', this.server.url!);
     this.state.update((s) => ({ ...s, user, deviceId, serverUrl: this.server.url }));
     void this.refreshReachability();
+    this.startSync();
+  }
+
+  private syncStarted = false;
+
+  /** Background sync: 30 s tick, connectivity changes, resume catch-up, schema check, realtime. */
+  private startSync(): void {
+    if (this.syncStarted) {
+      this.sync.resumeAfterAuth();
+      this.sync.schedule(0);
+      return;
+    }
+    this.syncStarted = true;
+    const tick = setInterval(() => this.sync.schedule(0), 30_000);
+    this.cleanups.push(() => clearInterval(tick));
+    void this.broker.onNetworkChange((n) => {
+      if (n.connected) void this.refreshReachability();
+      else this.sync.setOnline(false);
+    }).then((off) => this.cleanups.push(off));
+    void this.broker.onResume(() => void this.onResume()).then((off) => this.cleanups.push(off));
+    void this.onResume();
+  }
+
+  async onResume(): Promise<void> {
+    const r = await this.refreshReachability();
+    if (r.state !== 'online') return;
+    const schema = await this.server.schemaVersion();
+    this.sync.pauseForSchema(schema !== null && schema > ServerClient.SUPPORTED_SCHEMA);
+    await this.sync.catchUpAll();
+    await this.subscribeRealtime();
+    this.sync.schedule(0);
+  }
+
+  private async subscribeRealtime(): Promise<void> {
+    for (const c of (await this.sync.store.getMeta<string[]>('tracked')) ?? []) {
+      if (this.realtime.has(c)) continue;
+      try {
+        this.realtime.set(c, await this.server.subscribe(c, (rec) => void this.sync.onServerRecord(c, rec)));
+      } catch (err) {
+        log.warn('sync.realtime_failed', { collection: c, error: (err as Error).message });
+      }
+    }
+  }
+
+  /** 401/403 during sync: try a silent refresh, otherwise ask the owner to sign in (spec §Failure handling). */
+  private async recoverAuth(): Promise<void> {
+    const user = await this.server.restore();
+    if (user) {
+      this.sync.resumeAfterAuth();
+      return;
+    }
+    showToast('Your session expired. Sign in again to resume sync.', 'error', 8000);
   }
 
   async signOut(): Promise<void> {
@@ -174,6 +250,7 @@ export class Shell {
   async refreshReachability(): Promise<Reachability> {
     const r = await this.server.health();
     this.state.update((s) => ({ ...s, reachability: r }));
+    this.sync.setOnline(r.state === 'online');
     return r;
   }
 

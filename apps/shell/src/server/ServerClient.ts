@@ -6,6 +6,8 @@
 import PocketBase, { BaseAuthStore, ClientResponseError } from 'pocketbase';
 import type { Capabilities, FormFactor } from '@superapp/contracts';
 import type { Logger } from '../core/logger.ts';
+import type { OutboxRow, SyncRecord } from '../sync/store.ts';
+import type { SendResult } from '../sync/worker.ts';
 import { validateServerUrl } from '../core/url-policy.ts';
 
 export const SECRET_TOKEN = 'superapp.server.token';
@@ -153,5 +155,70 @@ export class ServerClient {
 
   async deviceId(): Promise<string | null> {
     return this.secrets.getSecret(SECRET_DEVICE);
+  }
+
+  /** Highest schema version this shell understands (spec: banner + paused writes above it). */
+  static readonly SUPPORTED_SCHEMA = 1;
+
+  async schemaVersion(): Promise<number | null> {
+    try {
+      const r = await this.client().collection('schema_info').getFirstListItem('', { sort: '-version' });
+      return Number(r.version);
+    } catch {
+      return null;
+    }
+  }
+
+  /** POST /api/sa/ops for one outbox row (spec §Sync write path step 4). */
+  async sendOp(row: OutboxRow, deviceId: string | null, timeoutMs = 15_000): Promise<SendResult> {
+    if (!this.pb || !this.baseUrl) return { kind: 'offline' };
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      const res = await this.fetchImpl(`${this.baseUrl}/api/sa/ops`, {
+        method: 'POST',
+        signal: ctrl.signal,
+        headers: {
+          'content-type': 'application/json',
+          authorization: this.pb.authStore.token,
+          ...(deviceId ? { 'x-superapp-device': deviceId } : {}),
+        },
+        body: JSON.stringify({ opId: row.opId, collection: row.collection, recordId: row.recordId, op: row.op, payload: row.payload, ...(row.baseVersion !== null ? { baseVersion: row.baseVersion } : {}) }),
+      });
+      const text = await res.text();
+      let body: Record<string, unknown> = {};
+      try {
+        body = text ? (JSON.parse(text) as Record<string, unknown>) : {};
+      } catch {
+        body = { message: text.slice(0, 200) };
+      }
+      return { kind: 'http', status: res.status, body };
+    } catch (err) {
+      return (err as Error).name === 'AbortError' ? { kind: 'timeout' } : { kind: 'offline' };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /** Catch-up query: records changed since `since` (spec §Read path). */
+  async listSince(collection: string, since: string | null, filter?: string): Promise<SyncRecord[]> {
+    const parts = [since ? `updated > "${since.replace(/"/g, '')}"` : '', filter ? `(${filter})` : ''].filter(Boolean);
+    const items = await this.client().collection(collection).getFullList({ filter: parts.join(' && '), sort: 'updated', batch: 200 });
+    return items as unknown as SyncRecord[];
+  }
+
+  async getRecord(collection: string, id: string): Promise<SyncRecord | null> {
+    try {
+      return (await this.client().collection(collection).getOne(id)) as unknown as SyncRecord;
+    } catch (err) {
+      if (err instanceof ClientResponseError && err.status === 404) return null;
+      throw err;
+    }
+  }
+
+  /** PocketBase realtime while in the foreground. Returns an unsubscribe function. */
+  async subscribe(collection: string, onRecord: (r: SyncRecord) => void): Promise<() => Promise<void>> {
+    const unsub = await this.client().collection(collection).subscribe('*', (e) => onRecord(e.record as unknown as SyncRecord));
+    return unsub;
   }
 }
