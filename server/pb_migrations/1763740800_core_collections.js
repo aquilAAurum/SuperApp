@@ -219,7 +219,7 @@ migrate(
         fields: [
           { name: "opId", type: "text", required: true, min: 8, max: 64, pattern: "^[A-Za-z0-9-]+$" },
           { name: "owner", type: "text", required: true, max: 15 },
-          { name: "collectionName", type: "text", required: true, max: 64 },
+          { name: "targetCollection", type: "text", required: true, max: 64 },
           { name: "recordId", type: "text", required: true, max: 15 },
           { name: "status", type: "number", required: true, onlyInt: true },
           { name: "result", type: "text", max: 2000000 },

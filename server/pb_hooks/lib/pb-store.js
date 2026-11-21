@@ -53,7 +53,7 @@ function makeStore(txApp) {
       var r = new Record(txApp.findCollectionByNameOrId("processed_ops"));
       r.set("opId", opId);
       r.set("owner", x.owner);
-      r.set("collectionName", x.collection);
+      r.set("targetCollection", x.collection);
       r.set("recordId", x.recordId);
       r.set("status", x.status);
       r.set("result", JSON.stringify(x.body));
