@@ -22,6 +22,7 @@
 | :-- | :-- | :-- | :-- | :-- | :-- |
 | `SA-2026-001` | M1 Foundations | `docs/features/SA-2026-001_Foundations.md` | F | `3_BUILD` | Jules |
 | `SA-2026-002` | M2 Shell and bridge | `docs/features/SA-2026-002_Shell_And_Bridge.md` | F | `3_BUILD` | Jules |
+| `SA-2026-003` | M3 Data and sync (**added 2026-11-21**, Nick: "Approve all decisions. Open PR and continue") | `docs/features/SA-2026-003_Data_And_Sync.md` | F | `3_BUILD` | Jules |
 
 Deferred (logged): biometric unlock (spec §Identity, optional) → M4 with the capability broker; notification inbox and deep-link router → M5; App manager, Permissions centre and Sync centre screens → M3–M5 with their data.
 
@@ -42,3 +43,7 @@ Follows Core `core/workflow/state-machine.md` (V4) without modification. Sprint-
 - **Hardening:** no open Critical/High findings; Profile §8 updated with run links.
 - **Docs:** ADR-001…003 accepted by Nick (2026-11-21).
 - **Learning:** D14 filed by each delivery persona; rejected outputs logged in `docs/evals/`.
+
+## 6. Sprint artifacts
+
+All persona artifacts, the Janus log and the sprint review are in [`sprint-1/`](sprint-1/README.md).
