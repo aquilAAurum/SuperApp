@@ -93,7 +93,7 @@ Status as of Sprint 1. "Wired" = gate exists in CI; "Green in CI" = it has passe
 | HB-QUAL-05 Type checking | Wired | `tsc` / `svelte-check --fail-on-warnings` |
 | HB-A11Y-01 axe-core | Wired | E2E scans setup, launcher, diagnostics, settings |
 | HB-A11Y-02 Input traversal | Open | Touch-first; D-pad traversal test arrives with the TV shell |
-| HB-SEC-01 SAST | **Blocked by repo setting** | `codeql.yml` analyses all files but SARIF upload fails until code scanning is enabled (Nick) |
+| HB-SEC-01 SAST | Wired (private-repo mode) | `codeql.yml`: CodeQL `security-extended`, SARIF kept as run artifact, `tools/check-sarif.mjs` fails on High/Critical (Nick approved 2026-11-22; no Security-tab upload on a personal private repo) |
 | HB-SEC-02 Secret scanning | **Manual (Nick)** | Repo setting |
 | HB-SEC-03 Threat model | Done for M1–M3 | `THREAT_MODEL.md` |
 | HB-SEC-04 No HTML sinks | Wired | ESLint `no-restricted-syntax`, `svelte/no-at-html-tags` |

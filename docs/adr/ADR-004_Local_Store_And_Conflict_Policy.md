@@ -1,7 +1,7 @@
 ---
 id: ADR-004
 title: Encrypted local store behind a key/value commit interface; server-wins conflict policy
-status: Proposed
+status: Accepted
 date: 2026-11-21
 decided_by: nick
 supersedes: []

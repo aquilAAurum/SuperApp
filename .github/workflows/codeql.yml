@@ -1,4 +1,7 @@
-# SAST (HB-SEC-01). Results appear under Security → Code scanning.
+# SAST (HB-SEC-01). The repo is private on a personal account, so GitHub code scanning (upload to the
+# Security tab) is unavailable. Instead CodeQL writes SARIF locally, the run keeps it as an artifact,
+# and tools/check-sarif.mjs fails the job on any High/Critical finding (security-severity >= 7.0).
+# If the repo moves to a plan with GitHub Code Security, set `upload: always` and drop the gate step.
 name: CodeQL
 
 on:
@@ -15,13 +18,25 @@ permissions:
 jobs:
   analyze:
     runs-on: ubuntu-24.04
-    permissions:
-      contents: read
-      security-events: write
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version-file: .nvmrc
       - uses: github/codeql-action/init@f09c1c0a94de965c15400f5634aa42fac8fb8f88 # v3.27.5
         with:
           languages: javascript-typescript
           queries: security-extended
       - uses: github/codeql-action/analyze@f09c1c0a94de965c15400f5634aa42fac8fb8f88 # v3.27.5
+        with:
+          upload: never
+          output: codeql-results
+      - name: Keep SARIF as run evidence
+        if: always()
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+        with:
+          name: codeql-sarif
+          path: codeql-results/
+          if-no-files-found: error
+      - name: Fail on High/Critical findings (HB-SEC-01 gate)
+        run: node tools/check-sarif.mjs codeql-results
