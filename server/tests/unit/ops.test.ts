@@ -127,6 +127,14 @@ describe('applyOp', () => {
     expect(store.processed.size).toBe(0);
   });
 
+  it('validation failures from the store are final 400s and are replayed, not retried', () => {
+    const invalid = Object.assign(Object.create(Object.getPrototypeOf(store)), store, { create: () => ({ invalid: 'displayName: Cannot be blank.' }) });
+    const res = applyOp(invalid, create('op-invalid-0001'), ctx);
+    expect(res).toMatchObject({ status: 400, body: { code: 'INVALID_PARAMS' } });
+    expect(String(res.body.message)).toContain('Cannot be blank');
+    expect(store.records.size).toBe(0);
+  });
+
   it('requires an authenticated user', () => {
     expect(applyOp(store, create(), { userId: '' }).status).toBe(401);
   });

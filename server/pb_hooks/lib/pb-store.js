@@ -13,6 +13,17 @@ function isSyncedCollection(collection) {
   return true;
 }
 
+/** Field validation first, so only validation failures become 400; save errors still throw (→ 500). */
+function saveValidated(txApp, r) {
+  try {
+    txApp.validate(r);
+  } catch (e) {
+    return { invalid: String(e) };
+  }
+  txApp.save(r);
+  return plain(r);
+}
+
 function makeStore(txApp) {
   return {
     isSynced: function (name) {
@@ -40,14 +51,12 @@ function makeStore(txApp) {
     create: function (collection, data) {
       var r = new Record(txApp.findCollectionByNameOrId(collection));
       r.load(data);
-      txApp.save(r);
-      return plain(r);
+      return saveValidated(txApp, r);
     },
     update: function (collection, id, patch) {
       var r = txApp.findRecordById(collection, id);
       r.load(patch);
-      txApp.save(r);
-      return plain(r);
+      return saveValidated(txApp, r);
     },
     markProcessed: function (opId, x) {
       var r = new Record(txApp.findCollectionByNameOrId("processed_ops"));

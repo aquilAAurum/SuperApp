@@ -46,9 +46,10 @@ routerAdd(
         res = applyOp(makeStore(txApp), op, { userId: userId, deviceId: deviceId });
       });
     } catch (err) {
-      // Record validation failures (bad field values) roll the transaction back and are not retryable.
-      $app.logger().warn("sa.ops.rejected", "collection", String(op.collection || ""), "error", String(err));
-      return e.json(400, { code: "INVALID_PARAMS", message: "The server rejected this record: " + String(err).slice(0, 300) });
+      // Validation failures are answered as 400 inside applyOp. Anything thrown here (database busy,
+      // I/O) rolled the transaction back and is transient: 500 lets the outbox retry with backoff.
+      $app.logger().error("sa.ops.failed", "collection", String(op.collection || ""), "error", String(err));
+      return e.json(500, { code: "SERVER_ERROR", message: "The server could not apply this change. It will be retried." });
     }
     return e.json(res.status, res.body);
   },

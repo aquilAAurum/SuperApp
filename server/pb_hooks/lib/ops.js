@@ -29,6 +29,16 @@ function err(status, code, message, extra) {
   return result(status, body);
 }
 
+/**
+ * store.create/update return either the saved record or { invalid: "<message>" } when the record
+ * failed field validation (nothing written). Validation failures are final (400); anything thrown is
+ * left to the caller and answered as a retryable 500.
+ */
+function saved(r) {
+  if (r && typeof r.invalid === "string") return err(400, "INVALID_PARAMS", "The server rejected this record: " + r.invalid.slice(0, 300));
+  return result(200, { record: r });
+}
+
 /** Validates the op shape. Returns an error result or null. */
 function validateOp(op) {
   if (!isObject(op)) return err(400, "INVALID_PARAMS", "op must be an object");
@@ -92,7 +102,7 @@ function applyOp(store, op, ctx) {
       data.owner = ctx.userId;
       data.deleted = false;
       if (ctx.deviceId) data.origin_device = ctx.deviceId;
-      res = result(200, { record: store.create(op.collection, data) });
+      res = saved(store.create(op.collection, data));
     }
   } else if (!existing) {
     res = err(404, "NOT_FOUND", "record does not exist on the server");
@@ -103,7 +113,7 @@ function applyOp(store, op, ctx) {
   } else {
     var patch = op.op === "delete" ? { deleted: true } : cleanPayload(op.payload);
     if (ctx.deviceId) patch.origin_device = ctx.deviceId;
-    res = result(200, { record: store.update(op.collection, op.recordId, patch) });
+    res = saved(store.update(op.collection, op.recordId, patch));
   }
 
   store.markProcessed(op.opId, { owner: ctx.userId, collection: op.collection, recordId: op.recordId, status: res.status, body: res.body });

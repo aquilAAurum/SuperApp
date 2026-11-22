@@ -39,7 +39,7 @@ export async function mockPocketBase(page: Page): Promise<MockServer> {
     if (url.pathname === '/api/collections/schema_info/records') return json(200, { page: 1, perPage: 1, totalItems: 1, totalPages: 1, items: [{ id: 'schema000000001', version: 1 }] });
     const list = /^\/api\/collections\/([a-z_]+)\/records$/.exec(url.pathname);
     if (list && req.method() === 'GET' && list[1] !== 'core_devices') {
-      const since = /updated > "([^"]*)"/.exec(url.searchParams.get('filter') ?? '')?.[1] ?? '';
+      const since = /updated >= "([^"]*)"/.exec(url.searchParams.get('filter') ?? '')?.[1] ?? '';
       const items = state.ops.since(list[1]!, since);
       return json(200, { page: 1, perPage: 1000, totalItems: items.length, totalPages: 1, items });
     }

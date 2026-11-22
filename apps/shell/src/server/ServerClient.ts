@@ -202,7 +202,9 @@ export class ServerClient {
 
   /** Catch-up query: records changed since `since` (spec §Read path). */
   async listSince(collection: string, since: string | null, filter?: string): Promise<SyncRecord[]> {
-    const parts = [since ? `updated > "${since.replace(/"/g, '')}"` : '', filter ? `(${filter})` : ''].filter(Boolean);
+    // `>=` not `>`: records updated in the same millisecond as `since` must not be missed. The mirror
+    // ignores versions it already has, so re-reading the boundary record is harmless.
+    const parts = [since ? `updated >= "${since.replace(/"/g, '')}"` : '', filter ? `(${filter})` : ''].filter(Boolean);
     const items = await this.client().collection(collection).getFullList({ filter: parts.join(' && '), sort: 'updated', batch: 200 });
     return items as unknown as SyncRecord[];
   }

@@ -82,6 +82,6 @@ export class FakeOpsServer implements OpTransport {
   }
 
   since(collection: string, since: string): Rec[] {
-    return [...this.records.entries()].filter(([k, r]) => k.startsWith(`${collection}/`) && r.updated > since).map(([, r]) => ({ ...r }));
+    return [...this.records.entries()].filter(([k, r]) => k.startsWith(`${collection}/`) && r.updated >= since).map(([, r]) => ({ ...r }));
   }
 }
