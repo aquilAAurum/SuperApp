@@ -4,7 +4,7 @@
 // 1. validates app.json against packages/contracts (same rules the shell enforces),
 // 2. zips dist/ + app.json (app.json at the root), writes <id>-<version>.zip and its SHA-256,
 // 3. with --builtin, also unpacks it into <shellPublicDir>/builtin/<id>/<version>/ and updates index.json.
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { validateManifest } from '../packages/contracts/src/manifest.ts';
 import { buildZip, mergeIndex, sha256 } from './pack-lib.mjs';
@@ -30,11 +30,12 @@ const dist = join(dir, 'dist');
 if (!existsSync(join(dist, m.entry))) die('pack.entry_missing', { entry: m.entry, hint: 'run the subapp build first' });
 
 const files = { 'app.json': new TextEncoder().encode(JSON.stringify(m, null, 2)) };
+// Directory entries carry their type, so files are read without a separate stat (no check-then-use race).
 const walk = (d) => {
-  for (const name of readdirSync(d)) {
-    const full = join(d, name);
-    if (statSync(full).isDirectory()) walk(full);
-    else files[relative(dist, full).split('\\').join('/')] = readFileSync(full);
+  for (const entry of readdirSync(d, { withFileTypes: true })) {
+    const full = join(d, entry.name);
+    if (entry.isDirectory()) walk(full);
+    else if (entry.isFile()) files[relative(dist, full).split('\\').join('/')] = readFileSync(full);
   }
 };
 walk(dist);
@@ -56,7 +57,12 @@ if (pub) {
   cpSync(dist, target, { recursive: true });
   writeFileSync(join(target, 'app.json'), JSON.stringify(m, null, 2));
   const indexPath = join(pub, 'builtin', 'index.json');
-  const index = existsSync(indexPath) ? JSON.parse(readFileSync(indexPath, 'utf8')) : null;
+  let index = null;
+  try {
+    index = JSON.parse(readFileSync(indexPath, 'utf8'));
+  } catch (err) {
+    if (err.code !== 'ENOENT') throw err;
+  }
   writeFileSync(indexPath, JSON.stringify(mergeIndex(index, { base: `/builtin/${m.id}/${m.version}/`, sha256: hash, manifest: m }), null, 2));
   log('pack.builtin_installed', { appId: m.id, path: relative(process.cwd(), target) });
 }

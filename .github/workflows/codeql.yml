@@ -6,8 +6,8 @@ name: CodeQL
 
 on:
   push:
-    # Agent working branches (ccr-*) also run so Evidence Bundles exist before a PR (CORE-01).
-    branches: [main, 'ccr-*']
+    # Working branches are covered by pull_request events (running both doubled CI load).
+    branches: [main]
   pull_request:
   schedule:
     - cron: '26 17 * * 4'

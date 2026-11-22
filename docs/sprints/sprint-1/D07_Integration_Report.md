@@ -27,7 +27,7 @@ To: Janus
 
 ### C. CI configuration review
 - All `uses:` pinned to 40-char SHAs (Step 0 check). Least-privilege `permissions:` per job.
-- Working branches `ccr-*` also trigger CI so evidence exists before a PR (deviation recorded in `.github/workflows/ci.yml`).
+- Before PR #6 existed, working branches `ccr-*` also triggered CI on push (ac0fcf9). Once the PR was open this doubled CI load and contributed to Maven Central throttling the Android job (HTTP 429), so push triggers are back to `main` only and Gradle dependencies are cached.
 
 ### D. Branch-protection spec for Nick (Settings → Branches → `main`)
 1. Make **`main` the default branch** (it is currently `ccr-a668c1bb-z0djyy`, because that was the first branch pushed). Open Dependabot PRs target the current default and will need retargeting or recreating.

@@ -13,8 +13,15 @@ function isSyncedCollection(collection) {
   return true;
 }
 
-/** Field validation first, so only validation failures become 400; save errors still throw (→ 500). */
+/**
+ * Field validation first, so only validation failures become 400; save errors still throw (→ 500).
+ * The version hook (ops.pb.js) runs inside save(), after this validation, so the version it will
+ * assign is set here first; the hook then sets the same value.
+ */
 function saveValidated(txApp, r) {
+  if (isSyncedCollection(r.collection())) {
+    r.set("version", r.isNew() ? 1 : r.original().getInt("version") + 1);
+  }
   try {
     txApp.validate(r);
   } catch (e) {

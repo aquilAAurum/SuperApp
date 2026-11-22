@@ -72,6 +72,7 @@ test.describe('M2 acceptance', () => {
     await attacker.evaluate(() => {
       (window as unknown as { __welcomed: boolean }).__welcomed = false;
       window.addEventListener('message', (e) => {
+        if (e.origin !== window.location.origin) return;
         if ((e.data as { type?: string })?.type === 'welcome') (window as unknown as { __welcomed: boolean }).__welcomed = true;
       });
       window.parent.postMessage({ type: 'hello', appId: 'hello', sdkVersion: '1.0.0' }, '*');
