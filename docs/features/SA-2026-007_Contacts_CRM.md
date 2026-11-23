@@ -2,7 +2,7 @@
 
 - **Feature ID:** SA-2026-007
 - **Doc ID:** D02 (PRD)   · **Producer:** Qz   · **Consumers:** Anansi, Mara, Priya, Jules, Kumi Wai, Russ, Jane, Theo, Arthur, Janus, Board
-- **Version:** 0.2   · **Status:** Proposal   · **Date:** 2026-11-23
+- **Version:** 0.3   · **Status:** Proposal   · **Date:** 2026-11-23
 - **Owner(s):** Qz (content), Nick (approval)   · **T-Shirt Size:** XL (delivered as six sprint-sized increments, §11)
 - **RICE:** R:1 | I:3 | C:70% | E:3 = 0.7 (single-owner product; Impact 3 because it replaces a daily-use tool)
 - **Subapp id:** `rolo` (collections `rolo_*`, events `rolo.*`, deep links `superapp://rolo/...`)
@@ -70,7 +70,7 @@ If reaching a person is one tap and the app tells you who is due, you will conta
 
 ### 2.1 The user
 
-Single owner (Nick). Has a day job (USCD, which uses Teams and a corporate mailbox). Also does FMCG consulting, runs a job search, is involved with Baypath and sits on the Milford Finance Committee, and keeps a personal network of family, friends and community. **Each of those roles has its own email account** (confirmed by Nick, 2026-11-23), so the app has to route by *organisation context*, not just by three networks.
+Single owner (Nick). Has a day job (USCD). Also does FMCG consulting, runs a job search, is involved with Baypath and sits on the Milford Finance Committee, and keeps a personal network of family, friends and community. **Each of those roles has its own email account** (confirmed by Nick, 2026-11-23), so the app has to route by *organisation context*, not just by three networks.
 
 ### 2.2 Networks and contexts
 
@@ -78,12 +78,15 @@ Three **networks** stay the top-level split. Inside a network, a **context** is 
 
 | Network | Context | Email identity (from-account) | Other identities | Default channels, in order |
 | :-- | :-- | :-- | :-- | :-- |
-| **Work** | **USCD** (employer) | USCD work email | Teams (USCD tenant), work phone if any | Teams chat → Teams call → USCD email → phone |
-| **Professional** | **FMCG** (consulting) | FMCG email | Google Voice (TBC), LinkedIn | FMCG email → LinkedIn → GV text → GV call |
-| **Professional** | **Job search** | Outlook account | LinkedIn, Google Voice (TBC) | Outlook email → LinkedIn → GV call |
-| **Professional** | **Baypath** | Baypath email | Phone / GV (TBC) | Baypath email → phone → SMS |
-| **Professional** | **Milford Finance Committee** | Milford email | Phone (TBC) | Milford email → phone → SMS |
-| **Personal** | **Personal** | Personal Gmail | Personal mobile, SMS, WhatsApp | SMS / WhatsApp (by contact) → phone → personal Gmail |
+| **Work** | **USCD** (employer) | USCD email (Google) | Teams (if used at USCD, TBC), **Google Voice** | Teams chat → USCD email → GV text → GV call |
+| **Professional** | **FMCG** (consulting) | FMCG email (Google) | **Google Voice**, LinkedIn | FMCG email → LinkedIn → GV text → GV call |
+| **Professional** | **Job search** | Outlook account (Microsoft) | **Google Voice**, LinkedIn | Outlook email → LinkedIn → GV call |
+| **Professional** | **Baypath** | Baypath email (Google) | **Google Voice** | Baypath email → GV text → GV call |
+| **Professional** | **Milford Finance Committee** | Milford email (**Outlook / Microsoft**) | **Google Voice** | Milford email → GV text → GV call |
+| **Personal** | **Personal** | Personal Gmail (Google) | **Personal mobile** (phone + SMS) | SMS → phone → personal Gmail |
+| *any* | *International contact* (number outside the home country) | — | **WhatsApp** (personal app) | WhatsApp chat first; then the context's usual email |
+
+**Channel conventions (Nick, 2026-11-23):** Google Voice is the voice and text line for every business context (Work and Professional); the personal mobile is for Personal only; WhatsApp is for international contacts in any context. These are defaults the resolver applies (§4.6), not hard locks.
 
 The email addresses themselves are entered in Settings (E7.1), not written in this repo. "TBC" items are confirmed in Sprint R0 (§12). Contexts are data, not code: adding a new board seat or client later means adding a context and an identity, nothing else.
 
@@ -107,7 +110,7 @@ The email addresses themselves are entered in Settings (E7.1), not written in th
 | ID | Story | Acceptance criteria |
 | :-- | :-- | :-- |
 | E1.1 | As the owner I can create, edit, merge and archive a contact with CRM attributes (§4.4). | Create/edit offline → synced with no duplicates (M3 guarantees). Merge keeps all memberships, affiliations, interactions; produces a merge record. Archive = soft delete. |
-| E1.2 | I can import my Obsidian vault (People + Organizations folders). The vault lives **on the phone and in Google Drive**: the primary path is picking the vault folder on the phone via the Android folder picker (SAF tree); the alternate is a zip of the vault picked from Google Drive. | If both copies are supplied, the importer compares them per note (modified time + content hash) and lists notes that differ so I choose which wins; it never merges silently. Dry run shows counts: new / matched / conflicts / skipped with reasons. Nothing is written until I confirm. YAML front matter fields map per a mapping table I can edit; unmapped keys go to `customFields`; note body becomes the contact's notes; `[[wikilinks]]` to org notes become affiliations; links to people become relationships. Report lists every source file (K6). |
+| E1.2 | I can migrate my Obsidian vault (People + Organizations folders) into the **central database**: PocketBase on the mini PC, which stores its data in SQLite and is the single source of truth (SA-C5). The **phone copy of the vault is canonical** (most recent, confirmed by Nick 2026-11-23); it is picked via the Android folder picker (SAF tree). The Google Drive copy is only a fallback source (zip). | The importer reads the phone copy only. Optional: a report of notes that exist only in the Drive copy, so nothing is lost; they are imported only if I tick them. Writes go through the normal path (outbox → `/api/sa/ops`) in batches that respect the bridge rate limit (see eval `2026-11-21_jules_bulk-writes-rate-limited`), so a large import is idempotent and resumable after a crash. After the import the vault is read-only, then archived (§9.1); the central database is the only place contacts are edited. Dry run shows counts: new / matched / conflicts / skipped with reasons. Nothing is written until I confirm. YAML front matter fields map per a mapping table I can edit; unmapped keys go to `customFields`; note body becomes the contact's notes; `[[wikilinks]]` to org notes become affiliations; links to people become relationships. Report lists every source file (K6). |
 | E1.3 | I can import phone contacts (`device.contacts.read`) and Google / LinkedIn CSV exports. | Consent sheet on first use. Matching by normalised E.164 phone, lower-cased email, then fuzzy name + org with manual review. No automatic overwrite of a field I edited. |
 | E1.4 | I can export everything to Markdown (Obsidian-compatible front matter) and CSV. | Round-trip test: export → re-import into an empty instance → zero diffs. |
 | E1.5 | Duplicate detection runs on create/import. | Suggests merges with a confidence score; never auto-merges. |
@@ -175,7 +178,7 @@ The email addresses themselves are entered in Settings (E7.1), not written in th
 
 | ID | Story | Acceptance criteria |
 | :-- | :-- | :-- |
-| E7.1 | Manage **contexts** (USCD, FMCG, Job search, Baypath, Milford Finance Committee, Personal, and any added later) and their **identities** (from-accounts): label, context, channel kind, address/number, provider, handler app, signature. | Seeded with the six contexts in §2.2. e.g. "USCD email · Outlook app"; "FMCG email · <provider handler>"; "Job search · Outlook"; "Personal · Gmail app"; "Teams · USCD". Each identity shows a "Test compose" button that opens a blank draft so I can confirm the right account appears. |
+| E7.1 | Manage **contexts** (USCD, FMCG, Job search, Baypath, Milford Finance Committee, Personal, and any added later) and their **identities** (from-accounts): label, context, channel kind, address/number, provider, handler app, signature. | Seeded with the six contexts in §2.2. e.g. "USCD email · Google"; "FMCG email · Google"; "Baypath email · Google"; "Milford email · Outlook"; "Job search · Outlook"; "Personal · Gmail app"; "Google Voice · business"; "Mobile · personal"; "WhatsApp · international". Each identity shows a "Test compose" button that opens a blank draft so I can confirm the right account appears. |
 | E7.2 | Per-network defaults: channel order, quiet hours, digest time, default tier. | Applies to new memberships; existing ones keep explicit overrides. |
 | E7.3 | Channel availability check. | Settings screen shows each channel's handler app as Installed / Missing / Web fallback. |
 
@@ -333,9 +336,10 @@ Input: contact, membership in use (from lens or primary), identities, current ti
 
 Rules in priority order (each produces a reason string):
 
-1. **Hard filters:** channel needs data (no SMS to a landline, no WhatsApp unless flagged/known, no Teams outside Work), identity must belong to the membership's context (else guarded), handler installed or web fallback exists.
+1. **Hard filters:** channel needs data (no SMS to a landline, no WhatsApp unless flagged/known, no Teams outside Work, no personal mobile line for Work/Professional memberships without the guard, no Google Voice for Personal unless set on the contact), identity must belong to the membership's context (else guarded), handler installed or web fallback exists.
 2. **Explicit preference** on the membership (E2.4) → top.
 3. **Campaign step** due today → that step's channel.
+3a. **International:** the contact's number is outside the home country → WhatsApp chat ranks first (call stays on the context's voice line, since WhatsApp links cannot start a call).
 4. **Reciprocity:** channel the contact used most recently *inbound* (when logged).
 5. **Habit:** most frequent successful outbound channel in last 90 days.
 6. **Context:** time-of-day vs contact quiet hours (demote voice), weekday/weekend for Work.
@@ -346,16 +350,16 @@ Rules in priority order (each produces a reason string):
 | Channel | Android mechanism | From-identity control | Confidence | Spike |
 | :-- | :-- | :-- | :-- | :-- |
 | Phone | `ACTION_DIAL tel:` | SIM default (dual-SIM selection is OS-level) | High | Dual-SIM handling |
-| Google Voice call | Intent targeted at GV package (`com.google.android.apps.googlevoice`) | GV number | **Medium** | S1: confirm GV accepts targeted `tel:` dial; fallback = GV "make calls" setting |
+| Google Voice call | Intent targeted at GV package (`com.google.android.apps.googlevoice`) | GV number (all business contexts) | **Medium** | **S1 (critical, since GV is the default business line):** confirm GV accepts targeted `tel:` dial; fallback = GV "make calls" setting |
 | SMS | `ACTION_SENDTO smsto:` with body | Default SMS app / SIM | High | — |
 | Google Voice text | `smsto:` targeted at GV package | GV number | **Medium** | S1 |
-| WhatsApp | `https://wa.me/<digits>?text=` (WhatsApp or Business package) | Which app = which number | High | S2: choose `com.whatsapp` vs `com.whatsapp.w4b` per identity |
+| WhatsApp | `https://wa.me/<digits>?text=` (personal `com.whatsapp`) | Personal WhatsApp number | High | S2: confirm chat opens with prefilled text; WhatsApp Business not needed in v1 |
 | Teams chat / call | `https://teams.microsoft.com/l/chat/0/0?users=<upn>&message=` / `/l/call/0/0?users=` | Signed-in Teams account | High (chat), Medium (call) | S3: verify call link on the phone |
-| Email (Google accounts: Personal Gmail, plus any of FMCG / Baypath / Milford on Google Workspace) | Account-addressed compose (`https://mail.google.com/mail/u/<account>/?view=cm&to=…`) or `mailto:` to the Gmail package | Account path segment; aliases via Gmail "Send as" | **Low–Medium** | **S4 (critical):** prove reliable from-account selection on the phone; fallback = server-side Gmail API draft in the correct mailbox, then open draft (needs a future integration with server-held token, never on phone) |
-| Email (Microsoft accounts: USCD work, Job-search Outlook, plus any context on Microsoft 365) | `mailto:` targeted at the Outlook package, or `ms-outlook://compose?to=` | Outlook app holds **several accounts** (at least USCD and Job search); its compose intent does not document an account selector | **Low–Medium** | S4: test whether compose opens with the last-used or default account; mitigation is the "Sending from" banner and per-context default-account checks |
+| Email (Google accounts: Personal Gmail, USCD, FMCG, Baypath) | Account-addressed compose (`https://mail.google.com/mail/u/<account>/?view=cm&to=…`) or `mailto:` to the Gmail package | Account path segment; aliases via Gmail "Send as" | **Low–Medium** | **S4 (critical):** prove reliable from-account selection on the phone; fallback = server-side Gmail API draft in the correct mailbox, then open draft (needs a future integration with server-held token, never on phone) |
+| Email (Microsoft accounts: Milford, Job-search Outlook) | `mailto:` targeted at the Outlook package, or `ms-outlook://compose?to=` | Outlook app holds **two accounts** (Milford and Job search); its compose intent does not document an account selector | **Low–Medium** | S4: test whether compose opens with the last-used or default account; mitigation is the "Sending from" banner and per-context default-account checks |
 | LinkedIn | Profile URL (App Link into `com.linkedin.android`) | Signed-in LinkedIn | High | — (messaging deep link not relied on) |
 
-With **six email identities across at least two providers**, from-account selection is the central technical risk. S4 runs once per identity (Test compose, E7.1) and records which mechanism works for each. The results become an ADR ("Identity routing per channel") before Sprint R2 build starts. Fallback ladder if a mechanism fails for an identity: (1) Google accounts → account-addressed Gmail web compose (`/mail/u/<address>/`), which selects the account explicitly; (2) Microsoft accounts → Outlook on the web compose for that account where it can be addressed, otherwise the Outlook app with a pre-launch sheet "Check: sending from <identity>"; (3) later, server-side drafts via Gmail API / Microsoft Graph created in the correct mailbox, then opened (tokens held on the mini PC only, never on the phone, as with existing integrations). The "Sending from: …" banner shows on every email launch regardless.
+With **six email identities: four Google (Personal, USCD, FMCG, Baypath) and two Microsoft (Milford, Job search)**, from-account selection is the central technical risk. S4 runs once per identity (Test compose, E7.1) and records which mechanism works for each. The results become an ADR ("Identity routing per channel") before Sprint R2 build starts. Fallback ladder if a mechanism fails for an identity: (1) Google accounts → account-addressed Gmail web compose (`/mail/u/<address>/`), which selects the account explicitly; (2) Microsoft accounts → Outlook on the web compose for that account where it can be addressed, otherwise the Outlook app with a pre-launch sheet "Check: sending from <identity>"; (3) later, server-side drafts via Gmail API / Microsoft Graph created in the correct mailbox, then opened (tokens held on the mini PC only, never on the phone, as with existing integrations). The "Sending from: …" banner shows on every email launch regardless.
 
 ### 4.8 Instrumentation
 
@@ -490,15 +494,15 @@ Toasts for saves/launch failures (SA-U2); sync state from shell header (SA-U3); 
 | Type | ID | Item | Owner | Mitigation / next step |
 | :-- | :-- | :-- | :-- | :-- |
 | Risk | R1 | Email from-account selection on Android is not reliably controllable, and there are six email identities across Google and Microsoft (§4.7) | Jules | Spike S4 per identity in R0; fallback ladder §4.7; "Sending from" banner; later server-side drafts |
-| Risk | R2 | Google Voice may not accept targeted dial/SMS intents | Jules | Spike S1; fallback opens GV app on the contact search |
+| Risk | R2 | Google Voice may not accept targeted dial/SMS intents. **Raised to High:** GV is the default voice/text line for every business context | Jules | Spike S1 first in R0; fallback = GV set to handle all outgoing calls + open GV app on the contact |
 | Risk | R3 | ~~Employer policy may forbid storing Work contacts on a personal server~~ Closed 2026-11-23: Nick confirmed it is allowed. Residual: organisation-specific confidentiality (Milford, Baypath) | Priya | D18 note in R0 |
 | Risk | R4 | Client-side graph queries too slow at NFR-1 scale | Bob / Jules | Benchmark in R4; server route fallback |
 | Risk | R5 | Obsidian front matter inconsistent across years | Qz | Mapping UI + dry-run report; manual review queue |
-| Risk | R7 | Two copies of the vault (phone and Google Drive) may have diverged | Qz / Jules | Importer per-note comparison (E1.2); Nick picks the canonical copy in the dry run |
+| Risk | R7 | ~~Two copies of the vault may have diverged~~ Closed 2026-11-23: phone copy is canonical; Drive-only notes are reported, not auto-imported | Qz | E1.2 |
 | Risk | R8 | Vault folder access: the folder picker may not grant a tree on the phone location, and `files.pick` in the bridge picks files, not folders | Jules | Spike S5 in R0; additive `files.pick({ directory: true })` contract change, or zip fallback |
 | Risk | R6 | Touch capture falls below K5 because logging is optional | Eleanor | One-tap outcomes, dismiss logs "Attempted", weekly nudge |
 | Assumption | A1 | M3 (sync) is merged and M4 (capability broker, contacts, external launch) is at least in `5_REVIEW` before R1 build | Janus | Gate in Sprint R1 plan prerequisites |
-| Assumption | A2 | ~~Identities~~ Confirmed 2026-11-23: Personal Gmail (personal); USCD (work); FMCG (consulting); Outlook (job search); Baypath; Milford (Finance Committee). Providers per account and Google Voice ownership still TBC | Nick | Q2 |
+| Assumption | A2 | ~~Identities~~ Confirmed 2026-11-23: Personal Gmail (personal); USCD (work); FMCG (consulting); Outlook (job search); Baypath; Milford (Finance Committee). Providers confirmed: Milford and Job search on Microsoft, the rest on Google. GV = business line, mobile = personal, WhatsApp = international | Nick | Closed |
 | Assumption | A3 | The Obsidian vault is the only legacy CRM source. Location confirmed 2026-11-23: on the phone and in Google Drive (the `baypath-notes` repo is only a stub) | Nick | Closed |
 | Issue | I1 | `core_people` lacks typed phone/email objects | Jules | Additive migration in R1 (JSON shape change is backward-compatible: plain strings accepted and upgraded) |
 | Dependency | D1 | SA-2026-004 `launcher.open` + `<queries>` | Jules | Contract 1.1 lands in R1 or with M4, whichever is first |
@@ -512,7 +516,7 @@ Toasts for saves/launch failures (SA-U2); sync state from shell header (SA-U3); 
 
 - Subapp released through the App manager channel (`subapps` collection); previous bundle kept for rollback (M5). Until M5 lands, sideload via the packer and `tools/deploy-server.ps1`.
 - Migrations are additive; `rolo_*` collections can be ignored by an older bundle. Rollback = previous bundle; data stays.
-- **Obsidian cutover:** (1) dry run, (2) import, (3) 2-week parallel run where Obsidian is read-only, (4) Markdown export snapshot archived to the vault as `_rolo-export-YYYY-MM-DD/`, (5) Obsidian retired as CRM SoT (ADR).
+- **Obsidian cutover (phone vault → central PocketBase/SQLite database):** (1) dry run on the phone copy, (2) import, (3) 2-week parallel run where Obsidian is read-only, (4) Markdown export snapshot archived to the vault as `_rolo-export-YYYY-MM-DD/`, (5) Obsidian retired as CRM SoT (ADR).
 
 ### 9.2 Observability & SLOs
 
@@ -678,12 +682,12 @@ PRD section for the sprint's epics final; D03 screens for those epics accepted; 
 
 | # | Question | Default if unanswered |
 | :-- | :-- | :-- |
-| Q1 | App name: "Rolodex" (`rolo`) or something else? | `rolo` |
-| Q2 | ~~Which email accounts map to which network?~~ **Answered 2026-11-23:** Personal Gmail = personal; USCD = work; FMCG = consulting; Outlook = job search; Baypath; Milford = Finance Committee. **Still open:** which provider hosts each of FMCG, Baypath and Milford (Google Workspace or Microsoft 365)? Which contexts use the Google Voice number? Does any context use WhatsApp Business? | Contexts seeded as §2.2; providers found in S4 |
-| Q3 | ~~Where is the vault?~~ **Answered:** on the phone and in Google Drive. **Still open:** which copy is canonical if they differ, and which front-matter keys/folders are in use? | Importer compares copies; mapping UI handles key discovery |
+| Q1 | ~~App name~~ **Answered: "Rolodex" (`rolo`).** | — |
+| Q2 | ~~Which email accounts map to which network?~~ **Answered 2026-11-23:** Personal Gmail = personal; USCD = work; FMCG = consulting; Outlook = job search; Baypath; Milford = Finance Committee. **Answered 2026-11-23:** Milford is Outlook; the other organisation accounts are Google; Google Voice is the business line; phone is personal; WhatsApp is for international contacts. **Still open:** does USCD use Teams? | Teams kept as an optional USCD channel |
+| Q3 | ~~Where is the vault?~~ **Answered:** on the phone and in Google Drive. **Phone copy is canonical** and migrates into the central database. **Still open:** which front-matter keys/folders are in use (a sample note would settle this)? | Mapping UI handles key discovery |
 | Q4 | ~~May Work contacts be stored on the mini PC?~~ **Answered: yes.** | — |
-| Q5 | Default cadence tiers (A 14 / B 30 / C 90 / D 365 days)? | As listed |
-| Q6 | Is Baypath Sponsors 2027 the right pilot campaign, and should campaign amounts be tracked? | Yes; optional amount field |
+| Q5 | ~~Cadence tiers~~ **Answered: A 14 / B 30 / C 90 / D 365 days.** | — |
+| Q6 | ~~Pilot campaign~~ **Answered: Baypath Sponsors 2027, with amounts tracked.** | — |
 | Q7 | Should the server send the daily digest (works when phone is off) or the phone (simpler)? | Phone (local notification) in v1 |
 
 ---
@@ -710,5 +714,6 @@ See §11.5.
 
 | Version | Date | Change |
 | :-- | :-- | :-- |
+| 0.3 | 2026-11-23 | Nick's answers: email providers (Milford + Job search Microsoft, rest Google); channel conventions (GV business, mobile personal, WhatsApp international) in §2.2 and resolver; vault phone copy canonical, migrated into the central PocketBase/SQLite database via batched ops; GV risk raised; Q1, Q5, Q6 closed. |
 | 0.2 | 2026-11-23 | Nick's answers: six email identities → per-organisation **contexts** inside networks (`rolo_contexts`), cross-context guard, from-account risk and fallback ladder expanded; vault on phone + Google Drive (dual-copy import, spike S5); mini-PC storage of all contacts approved; Q2–Q4 updated. |
 | 0.1 | 2026-11-22 | First draft: pivot from Obsidian/Markdown CRM to the `rolo` subapp; epics E1–E7; data contract; channel/identity matrix; sprints R0–R6 with agent deliverables. |
