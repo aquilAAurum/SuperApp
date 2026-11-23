@@ -2,7 +2,7 @@
 
 - **Feature ID:** SA-2026-007
 - **Doc ID:** D02 (PRD)   · **Producer:** Qz   · **Consumers:** Anansi, Mara, Priya, Jules, Kumi Wai, Russ, Jane, Theo, Arthur, Janus, Board
-- **Version:** 0.1   · **Status:** Proposal   · **Date:** 2026-11-22
+- **Version:** 0.2   · **Status:** Proposal   · **Date:** 2026-11-23
 - **Owner(s):** Qz (content), Nick (approval)   · **T-Shirt Size:** XL (delivered as six sprint-sized increments, §11)
 - **RICE:** R:1 | I:3 | C:70% | E:3 = 0.7 (single-owner product; Impact 3 because it replaces a daily-use tool)
 - **Subapp id:** `rolo` (collections `rolo_*`, events `rolo.*`, deep links `superapp://rolo/...`)
@@ -30,7 +30,7 @@ A lightweight, phone-first contact manager with CRM attributes, delivered as a S
 | Pillar | What it does |
 | :-- | :-- |
 | **Launcher** | Channel resolver chooses the best channel and from-identity per contact and context; one-tap primary action, ranked alternates, "why this?" explanation. |
-| **Three networks** | Every contact belongs to **Work**, **Professional** and/or **Personal**, each with its own default channels and from-identities. A global **network lens** hides everything outside the chosen network; a cross-network guard stops wrong-account sends. |
+| **Three networks** | Every contact belongs to **Work**, **Professional** and/or **Personal**, each with its own default channels and from-identities. A global **network lens** hides everything outside the chosen network; a cross-context guard stops wrong-account sends (e.g. a Milford email to a USCD colleague). |
 | **Cadence** | Tier-based contact frequency, health score, a daily **Today** queue of who is due, and touch logging that updates automatically after each launch. |
 | **Network navigation** | Organisations and education as first-class records; affiliations with dates; "who do I know at X", "who else went to Y", shared employer/alma-mater overlaps, and warm-intro paths. |
 | **Campaigns** | Named outreach drives with target lists, pipeline stages, per-channel templates, campaign-specific cadence and progress metrics. |
@@ -43,7 +43,7 @@ The Obsidian vault is imported once (with a dry-run diff), then retired as the s
 | :-- | :-- | :-- | :-- |
 | K1 | **Taps to reach** a contact from the launcher home | ≤ 3 taps (search/open → primary channel), ≤ 2 from Today queue | E2E step count; instrumented `rolo.launch` events |
 | K2 | **Time to channel open** (tap primary action → external app foreground) | p50 < 1.0 s, p95 < 2.0 s on the phone | `rolo.launch` timing in Diagnostics |
-| K3 | **Wrong-identity sends** (channel/from-account outside the contact's network without explicit override) | 0 | Guard log; Russ adversarial tests |
+| K3 | **Wrong-identity sends** (channel/from-account outside the membership's context without explicit override) | 0 | Guard log; Russ adversarial tests |
 | K4 | **Cadence adherence** for Tier A contacts | ≥ 85 % within cadence after 8 weeks of use | Cadence report |
 | K5 | **Touch capture rate** (launches that end with a logged touch) | ≥ 80 % | `rolo_interactions` / `rolo.launch` |
 | K6 | **Import fidelity** of the Obsidian vault | 100 % of notes accounted for (imported, merged or explicitly skipped), 0 silent field loss | Importer report vs vault file count |
@@ -70,21 +70,30 @@ If reaching a person is one tap and the app tells you who is due, you will conta
 
 ### 2.1 The user
 
-Single owner (Nick). Works in a role that uses Microsoft Teams and a corporate mailbox; maintains a professional network (former colleagues, industry peers, alumni, board/non-profit contacts such as Baypath sponsors); maintains a personal network (family, friends, community).
+Single owner (Nick). Has a day job (USCD, which uses Teams and a corporate mailbox). Also does FMCG consulting, runs a job search, is involved with Baypath and sits on the Milford Finance Committee, and keeps a personal network of family, friends and community. **Each of those roles has its own email account** (confirmed by Nick, 2026-11-23), so the app has to route by *organisation context*, not just by three networks.
 
-### 2.2 Network definitions
+### 2.2 Networks and contexts
 
-| Network | Who | Default identities (configurable) | Default channels, in order |
-| :-- | :-- | :-- | :-- |
-| **Work** | People at the current employer, its clients and vendors in a work capacity | Work email (corporate account), Teams, work mobile if any | Teams chat → Teams call → work email → phone |
-| **Professional** | Career network outside the current employer: ex-colleagues, peers, recruiters, alumni, board and non-profit contacts | Professional email (e.g. personal-brand / consulting address), Google Voice number, LinkedIn | Email (professional) → LinkedIn → Google Voice text → Google Voice call |
-| **Personal** | Family, friends, neighbours, community | Personal Gmail, personal mobile, WhatsApp | SMS / WhatsApp (by contact) → phone → personal email |
+Three **networks** stay the top-level split. Inside a network, a **context** is the organisation or role a relationship belongs to. Each context owns its from-identities. Contexts are what decide which email account a message comes from.
+
+| Network | Context | Email identity (from-account) | Other identities | Default channels, in order |
+| :-- | :-- | :-- | :-- | :-- |
+| **Work** | **USCD** (employer) | USCD work email | Teams (USCD tenant), work phone if any | Teams chat → Teams call → USCD email → phone |
+| **Professional** | **FMCG** (consulting) | FMCG email | Google Voice (TBC), LinkedIn | FMCG email → LinkedIn → GV text → GV call |
+| **Professional** | **Job search** | Outlook account | LinkedIn, Google Voice (TBC) | Outlook email → LinkedIn → GV call |
+| **Professional** | **Baypath** | Baypath email | Phone / GV (TBC) | Baypath email → phone → SMS |
+| **Professional** | **Milford Finance Committee** | Milford email | Phone (TBC) | Milford email → phone → SMS |
+| **Personal** | **Personal** | Personal Gmail | Personal mobile, SMS, WhatsApp | SMS / WhatsApp (by contact) → phone → personal Gmail |
+
+The email addresses themselves are entered in Settings (E7.1), not written in this repo. "TBC" items are confirmed in Sprint R0 (§12). Contexts are data, not code: adding a new board seat or client later means adding a context and an identity, nothing else.
 
 **Rules**
 
-- A contact has exactly one **primary network** and zero or more **secondary networks** (e.g. a colleague who is also a friend). Channel preferences, cadence tier and notes visibility are set **per network membership**, not per contact.
-- The **network lens** (All · Work · Professional · Personal) is a persistent global filter shown in the subapp header. In a single-network lens, search, Today, campaigns and launch only use that network's memberships and identities.
-- **Cross-network guard:** launching a channel whose from-identity belongs to a different network than the membership in use requires an explicit "Send from <identity> anyway" confirmation in a bottom sheet (no `confirm()`; SA-U2). Every override is logged.
+- A contact has exactly one **primary membership** and zero or more secondary ones (e.g. a USCD colleague who is also a friend, or a Baypath sponsor who is also an FMCG client). A **membership is network + context**. Channel preferences, cadence tier and notes visibility are set **per membership**, not per contact.
+- The resolver takes the from-identity from the membership's context. Example: emailing a Baypath sponsor always proposes the Baypath account, even if that person is also a personal friend, unless you open them through their Personal membership.
+- Campaigns carry a context (the Baypath sponsorship campaign defaults to the Baypath identity; the job-search campaign to Outlook).
+- The **network lens** (All · Work · Professional · Personal) is a persistent global filter shown in the subapp header, with an optional context sub-filter (e.g. Professional › Baypath). In a single-network lens, search, Today, campaigns and launch only use that network's memberships and identities.
+- **Cross-context guard:** launching a channel whose from-identity belongs to a different context than the membership in use (e.g. Milford email to a USCD colleague) requires an explicit "Send from <identity> anyway" confirmation in a bottom sheet (no `confirm()`; SA-U2). Every override is logged.
 - Work network data is flagged `sensitivity: work` for privacy treatment (§5.2).
 
 ---
@@ -98,7 +107,7 @@ Single owner (Nick). Works in a role that uses Microsoft Teams and a corporate m
 | ID | Story | Acceptance criteria |
 | :-- | :-- | :-- |
 | E1.1 | As the owner I can create, edit, merge and archive a contact with CRM attributes (§4.4). | Create/edit offline → synced with no duplicates (M3 guarantees). Merge keeps all memberships, affiliations, interactions; produces a merge record. Archive = soft delete. |
-| E1.2 | I can import my Obsidian vault (People + Organizations folders) from a zip or folder picked via SAF. | Dry run shows counts: new / matched / conflicts / skipped with reasons. Nothing is written until I confirm. YAML front matter fields map per a mapping table I can edit; unmapped keys go to `customFields`; note body becomes the contact's notes; `[[wikilinks]]` to org notes become affiliations; links to people become relationships. Report lists every source file (K6). |
+| E1.2 | I can import my Obsidian vault (People + Organizations folders). The vault lives **on the phone and in Google Drive**: the primary path is picking the vault folder on the phone via the Android folder picker (SAF tree); the alternate is a zip of the vault picked from Google Drive. | If both copies are supplied, the importer compares them per note (modified time + content hash) and lists notes that differ so I choose which wins; it never merges silently. Dry run shows counts: new / matched / conflicts / skipped with reasons. Nothing is written until I confirm. YAML front matter fields map per a mapping table I can edit; unmapped keys go to `customFields`; note body becomes the contact's notes; `[[wikilinks]]` to org notes become affiliations; links to people become relationships. Report lists every source file (K6). |
 | E1.3 | I can import phone contacts (`device.contacts.read`) and Google / LinkedIn CSV exports. | Consent sheet on first use. Matching by normalised E.164 phone, lower-cased email, then fuzzy name + org with manual review. No automatic overwrite of a field I edited. |
 | E1.4 | I can export everything to Markdown (Obsidian-compatible front matter) and CSV. | Round-trip test: export → re-import into an empty instance → zero diffs. |
 | E1.5 | Duplicate detection runs on create/import. | Suggests merges with a confidence score; never auto-merges. |
@@ -166,7 +175,7 @@ Single owner (Nick). Works in a role that uses Microsoft Teams and a corporate m
 
 | ID | Story | Acceptance criteria |
 | :-- | :-- | :-- |
-| E7.1 | Manage **identities** (from-accounts): label, network, channel kind, address/number, handler app, signature. | e.g. "Work email · nick@corp.com · Outlook"; "Personal Gmail · …@gmail.com · Gmail"; "Google Voice · +1 … · GV app"; "Teams · nick@corp.com". |
+| E7.1 | Manage **contexts** (USCD, FMCG, Job search, Baypath, Milford Finance Committee, Personal, and any added later) and their **identities** (from-accounts): label, context, channel kind, address/number, provider, handler app, signature. | Seeded with the six contexts in §2.2. e.g. "USCD email · Outlook app"; "FMCG email · <provider handler>"; "Job search · Outlook"; "Personal · Gmail app"; "Teams · USCD". Each identity shows a "Test compose" button that opens a blank draft so I can confirm the right account appears. |
 | E7.2 | Per-network defaults: channel order, quiet hours, digest time, default tier. | Applies to new memberships; existing ones keep explicit overrides. |
 | E7.3 | Channel availability check. | Settings screen shows each channel's handler app as Installed / Missing / Web fallback. |
 
@@ -174,7 +183,7 @@ Single owner (Nick). Works in a role that uses Microsoft Teams and a corporate m
 
 | Priority | Scope |
 | :-- | :-- |
-| **Must** | E1.1–E1.4, E2.1–E2.7, E3.1–E3.5, E4.1–E4.4, E5.1–E5.3, E6.1–E6.3, E7.1–E7.3, cross-network guard, Markdown export |
+| **Must** | E1.1–E1.4, E2.1–E2.7, E3.1–E3.5, E4.1–E4.4, E5.1–E5.3, E6.1–E6.3, E7.1–E7.3, cross-context guard, Markdown export |
 | **Should** | E1.5, E2.8, E3.6–E3.7, E4.5–E4.7, E5.4–E5.7 |
 | **Could** | E4.8 graph view, contact photo sync, vCard QR share, TV read-only view (D-pad) |
 | **Won't (v1)** | Automatic capture from call log/SMS/Gmail/Teams (E3.8), LinkedIn scraping or enrichment APIs, bulk email sending, write-back to Android contacts, multi-user sharing |
@@ -216,7 +225,7 @@ Draft manifest (for Jules; final in `subapps/rolo/app.json`):
     "required": ["data.own", "core.people.read", "core.people.write", "core.tags.read", "apps.launch"],
     "optional": ["device.contacts.read", "notify.post", "files.read", "nav.open"]
   },
-  "collections": ["rolo_profiles", "rolo_memberships", "rolo_identities", "rolo_orgs", "rolo_affiliations",
+  "collections": ["rolo_profiles", "rolo_contexts", "rolo_memberships", "rolo_identities", "rolo_orgs", "rolo_affiliations",
                   "rolo_relationships", "rolo_interactions", "rolo_campaigns", "rolo_campaign_targets",
                   "rolo_templates", "rolo_filters", "rolo_imports"],
   "events": { "emits": ["rolo.touch.logged", "rolo.campaign.stage_changed"], "listens": ["core.person.updated"] },
@@ -266,13 +275,14 @@ All collections follow the synced-collection conventions (device-generated `id`,
 | :-- | :-- | :-- |
 | `core_people` (existing) | Shared identity | displayName, phones (JSON: `[{e164, type, label, smsCapable, whatsapp}]`), emails (JSON: `[{address, type, label}]`), sourceIds, tags |
 | `rolo_profiles` | CRM attributes, 1:1 with a person | person (rel `core_people`, unique), isMe (bool), firstName, lastName, nickname, pronouns, photo (rel `core_files`), birthday, anniversaries (JSON), location {city, region, country, tz}, linkedinUrl, howWeMet, metAt (date), introducedBy (rel person), interests (JSON), family (JSON), customFields (JSON), notes (markdown), sourceNotePath (Obsidian origin) |
-| `rolo_memberships` | Person ↔ network | person, network (`work`/`professional`/`personal`), primary (bool), tier (`A`/`B`/`C`/`D`/`none`), cadenceDays (override), preferredChannels (JSON ordered list), preferredIdentity (rel identity), quietHours (JSON), lastTouchAt, nextDueAt, snoozedUntil, snoozeReason, sensitivity (`normal`/`work`) |
-| `rolo_identities` | My from-accounts | label, network, kind (`email`/`teams`/`phone`/`gvoice`/`sms`/`whatsapp`/`linkedin`), address, handler (`gmail`/`outlook`/`gmail_web`/`dialer`/`gvoice`/`whatsapp`/`whatsapp_business`/`teams`/`linkedin`/`default`), signature, active |
+| `rolo_contexts` | Organisation/role a relationship belongs to (§2.2) | name, network, org (rel `rolo_orgs`, optional), defaultIdentity (rel identity), channelOrder (JSON), quietHours (JSON), color, active |
+| `rolo_memberships` | Person ↔ network + context | person, network (`work`/`professional`/`personal`), context (rel `rolo_contexts`), primary (bool), tier (`A`/`B`/`C`/`D`/`none`), cadenceDays (override), preferredChannels (JSON ordered list), preferredIdentity (rel identity), quietHours (JSON), lastTouchAt, nextDueAt, snoozedUntil, snoozeReason, sensitivity (`normal`/`work`) |
+| `rolo_identities` | My from-accounts | label, context (rel `rolo_contexts`), network (derived), provider (`google`/`microsoft`/`other`), kind (`email`/`teams`/`phone`/`gvoice`/`sms`/`whatsapp`/`linkedin`), address, handler (`gmail`/`outlook`/`gmail_web`/`dialer`/`gvoice`/`whatsapp`/`whatsapp_business`/`teams`/`linkedin`/`default`), signature, active |
 | `rolo_orgs` | Companies, schools, non-profits | name, kind (`company`/`school`/`nonprofit`/`association`/`government`/`other`), aliases (JSON), domains (JSON), parent (rel org), location, linkedinUrl, notes |
 | `rolo_affiliations` | Person ↔ org over time | person, org, kind (`employment`/`education`/`board`/`volunteer`/`membership`/`client`), title, department, degree, field, classYear, start, end, current (bool), source (`manual`/`obsidian`/`linkedin_csv`/`contacts`) |
 | `rolo_relationships` | Person ↔ person | from, to, kind (`knows`/`introduced_by`/`reports_to`/`family`/`partner`/`mentor`), strength (1–5), since, notes |
-| `rolo_interactions` | Touches / timeline | person, membership, network, channel, identity, direction (`out`/`in`), outcome, at, durationSec, note, campaign (rel), launchId (correlates with launch event) |
-| `rolo_campaigns` | Outreach drives | name, kind, goal, metric {type, target}, networks (JSON), startAt, endAt, stages (JSON ordered), cadenceDays, sequence (JSON steps), defaultIdentity, status (`draft`/`active`/`paused`/`closed`) |
+| `rolo_interactions` | Touches / timeline | person, membership, network, context, channel, identity, direction (`out`/`in`), outcome, at, durationSec, note, campaign (rel), launchId (correlates with launch event) |
+| `rolo_campaigns` | Outreach drives | name, kind, context (rel), goal, metric {type, target}, networks (JSON), startAt, endAt, stages (JSON ordered), cadenceDays, sequence (JSON steps), defaultIdentity, status (`draft`/`active`/`paused`/`closed`) |
 | `rolo_campaign_targets` | Person in a campaign | campaign, person, stage, stageChangedAt, nextStepAt, amount (number, optional), outcome, notes |
 | `rolo_templates` | Message templates | name, channelKinds (JSON), network, campaign (rel, optional), subject, body (with merge fields) |
 | `rolo_filters` | Saved smart lists | name, network, query (JSON AST) |
@@ -288,7 +298,7 @@ All collections follow the synced-collection conventions (device-generated `id`,
 | `phone`, `email`, `mobile`, `work_email` | `core_people.phones/emails` with types |
 | `company`, `title`, `[[Org]]` links in body | `rolo_affiliations` (employment, current) + `rolo_orgs` |
 | `school`, `alma_mater`, `education` | `rolo_affiliations` (education) |
-| `tags` (`#work`, `#personal`, `#prof`…) | `rolo_memberships.network` via tag→network table; remaining tags → `core_tags` |
+| `tags` (`#work`, `#personal`, `#baypath`, `#fmcg`…) and folder path | `rolo_memberships.network` + `context` via an editable tag/folder → context table; remaining tags → `core_tags` |
 | `last_contact`, `cadence`, `tier` | `rolo_memberships.lastTouchAt / cadenceDays / tier` |
 | `birthday`, `location`, `linkedin` | `rolo_profiles` |
 | dated bullets "2025-03-02 – coffee …" | `rolo_interactions` (best-effort parser, flagged `imported`) |
@@ -323,13 +333,13 @@ Input: contact, membership in use (from lens or primary), identities, current ti
 
 Rules in priority order (each produces a reason string):
 
-1. **Hard filters:** channel needs data (no SMS to a landline, no WhatsApp unless flagged/known, no Teams outside Work), identity must belong to the membership's network (else guarded), handler installed or web fallback exists.
+1. **Hard filters:** channel needs data (no SMS to a landline, no WhatsApp unless flagged/known, no Teams outside Work), identity must belong to the membership's context (else guarded), handler installed or web fallback exists.
 2. **Explicit preference** on the membership (E2.4) → top.
 3. **Campaign step** due today → that step's channel.
 4. **Reciprocity:** channel the contact used most recently *inbound* (when logged).
 5. **Habit:** most frequent successful outbound channel in last 90 days.
 6. **Context:** time-of-day vs contact quiet hours (demote voice), weekday/weekend for Work.
-7. **Network default order** (§2.2).
+7. **Context default order** (§2.2), then network default.
 
 ### 4.7 From-account (identity) routing — channel matrix and spike items
 
@@ -341,11 +351,11 @@ Rules in priority order (each produces a reason string):
 | Google Voice text | `smsto:` targeted at GV package | GV number | **Medium** | S1 |
 | WhatsApp | `https://wa.me/<digits>?text=` (WhatsApp or Business package) | Which app = which number | High | S2: choose `com.whatsapp` vs `com.whatsapp.w4b` per identity |
 | Teams chat / call | `https://teams.microsoft.com/l/chat/0/0?users=<upn>&message=` / `/l/call/0/0?users=` | Signed-in Teams account | High (chat), Medium (call) | S3: verify call link on the phone |
-| Email (Gmail) | Account-addressed compose (`https://mail.google.com/mail/u/<account>/?view=cm&to=…`) or `mailto:` to the Gmail package | Account path segment; aliases via Gmail "Send as" | **Low–Medium** | **S4 (critical):** prove reliable from-account selection on the phone; fallback = server-side Gmail API draft in the correct mailbox, then open draft (needs a future integration with server-held token, never on phone) |
-| Email (Outlook / work) | `mailto:` targeted at Outlook package, or `ms-outlook://compose?to=` | Outlook default account (single work account) | Medium | S4 |
+| Email (Google accounts: Personal Gmail, plus any of FMCG / Baypath / Milford on Google Workspace) | Account-addressed compose (`https://mail.google.com/mail/u/<account>/?view=cm&to=…`) or `mailto:` to the Gmail package | Account path segment; aliases via Gmail "Send as" | **Low–Medium** | **S4 (critical):** prove reliable from-account selection on the phone; fallback = server-side Gmail API draft in the correct mailbox, then open draft (needs a future integration with server-held token, never on phone) |
+| Email (Microsoft accounts: USCD work, Job-search Outlook, plus any context on Microsoft 365) | `mailto:` targeted at the Outlook package, or `ms-outlook://compose?to=` | Outlook app holds **several accounts** (at least USCD and Job search); its compose intent does not document an account selector | **Low–Medium** | S4: test whether compose opens with the last-used or default account; mitigation is the "Sending from" banner and per-context default-account checks |
 | LinkedIn | Profile URL (App Link into `com.linkedin.android`) | Signed-in LinkedIn | High | — (messaging deep link not relied on) |
 
-The spike results become an ADR ("Identity routing per channel") before Sprint R2 build starts. If S4 fails, v1 ships with **handler-per-network** routing (Work → Outlook, Personal → Gmail app, Professional → Gmail web account path) plus a visible "Sending from: …" banner so a wrong account is caught before Send.
+With **six email identities across at least two providers**, from-account selection is the central technical risk. S4 runs once per identity (Test compose, E7.1) and records which mechanism works for each. The results become an ADR ("Identity routing per channel") before Sprint R2 build starts. Fallback ladder if a mechanism fails for an identity: (1) Google accounts → account-addressed Gmail web compose (`/mail/u/<address>/`), which selects the account explicitly; (2) Microsoft accounts → Outlook on the web compose for that account where it can be addressed, otherwise the Outlook app with a pre-launch sheet "Check: sending from <identity>"; (3) later, server-side drafts via Gmail API / Microsoft Graph created in the correct mailbox, then opened (tokens held on the mini PC only, never on the phone, as with existing integrations). The "Sending from: …" banner shows on every email launch regardless.
 
 ### 4.8 Instrumentation
 
@@ -372,7 +382,7 @@ These feed K1–K6 in a small in-app Insights screen (Should) and Diagnostics.
 | Import (Markdown zip, CSV, vCard via share) | Zip bombs, path traversal, oversized files, Markdown with HTML | Size/entry caps, no path use from archive, parse as text, render notes with a Markdown renderer that disallows raw HTML (HB-SEC-04) |
 | Message templates & notes | Stored XSS in the subapp | No `innerHTML`; sanitized Markdown; CSP already `connect-src 'none'` |
 | New `<queries>` packages | Package visibility expansion | Only the handlers in §4.7; Step 0 allow-list |
-| Cross-network sends | Reputational/data-leak harm (work info to personal account or vice versa) | Cross-network guard, logging, Russ adversarial tests (K3) |
+| Cross-context sends | Reputational/data-leak harm (USCD, FMCG, Baypath or Milford matters sent from the wrong account) | Cross-context guard, logging, Russ adversarial tests (K3) |
 | Bulk data on phone | Lost phone exposes whole network | Already covered: SQLCipher mirror, Keystore key, biometric unlock (M4) recommended on for `rolo` |
 
 ### 5.2 Data inventory delta (Priya)
@@ -380,9 +390,9 @@ These feed K1–K6 in a small in-app Insights screen (Should) and Diagnostics.
 | Data | Purpose | Where | Retention | Protection / note |
 | :-- | :-- | :-- | :-- | :-- |
 | Third-party personal data (names, numbers, emails, birthdays, family, employment/education history, notes) | Relationship management | PocketBase `rolo_*`, `core_people`; phone mirror | Until deleted by owner; soft delete 30 days | Owner-only; encrypted mirror; encrypted backups. Household/personal use, but **Work** contacts may fall under employer data policy |
-| Work network records (`sensitivity: work`) | Work relationships | Same | Same | Priya to confirm whether storing colleague/client contact data on a personal server is allowed; if not, Work network holds only links + minimal fields and the corporate address book stays authoritative |
+| Work and organisation-context records (USCD, FMCG, Baypath, Milford, Job search) | Relationships per context | Same | Same | **Nick confirmed (2026-11-23) storing these on the mini PC is allowed.** Priya still reviews organisation-specific obligations (e.g. Milford committee or Baypath donor confidentiality) in D18 and whether any context needs restricted fields |
 | Interaction log (who, when, channel, outcome, short note) | Cadence | Same | Configurable auto-prune (default keep) | No message content captured |
-| Imported Obsidian vault copy (zip) | Import audit | `core_files` | Deleted after successful import + 30 days | Owner-only |
+| Imported Obsidian vault copy (phone folder snapshot and/or Drive zip) | Import audit | `core_files` | Deleted after successful import + 30 days | Owner-only |
 | Identities (my addresses/numbers) | Routing | `rolo_identities` | Until removed | Not secrets; no OAuth tokens on phone |
 
 ### 5.3 Applicable HB-IDs
@@ -412,7 +422,7 @@ D04 delta to `THREAT_MODEL.md` produced by Mara in Sprint R0 (§11).
 │                                               │   │ Professional (A) · Personal (C) │
 │ TODAY  5 due · 2 overdue        [Campaigns]   │   │ ● Healthy — last touch 9 d ago  │
 │ ┌───────────────────────────────────────────┐ │   │ ┌─────────────────────────────┐ │
-│ │ ● Sam Ortiz   overdue 6d  [✉ Email·prof] │ │   │ │  ✉  Email · nick@prof.me     │ │ ← primary
+│ │ ● Sam Ortiz   overdue 6d  [✉ Email·FMCG] │ │   │ │  ✉  Email · FMCG account     │ │ ← primary
 │ │ ● Priya Shah  due today   [💬 GV text  ] │ │   │ └─────────────────────────────┘ │
 │ │ ◆ Lee Wong    Baypath: Contacted→ [in LinkedIn]│ │ [in LinkedIn] [GV text] [GV call]│
 │ │ 🎂 Ana Ruiz   birthday    [WhatsApp   ] │ │   │ [WhatsApp·personal ⚠]  Why this?│
@@ -422,7 +432,7 @@ D04 delta to `THREAT_MODEL.md` produced by Mara in Sprint R0 (§11).
 └───────────────────────────────────────────────┘   │ 🎓 State Univ · MBA '12 / '14   │
                                                     │ TIMELINE  ▸ 11/13 Email · Sent  │
 ┌─ How did it go? ─────────────────────────────┐    │ CAMPAIGNS ▸ Baypath 2027: Engaged│
-│ Email to Dana from nick@prof.me · 10:42      │    │ NOTES  ▸ …                      │
+│ Email to Dana from FMCG · 10:42             │    │ NOTES  ▸ …                      │
 │ [Sent] [Talked] [Left msg] [No answer] [Sched]│   └─────────────────────────────────┘
 │ Note: ___________________   Campaign: Baypath│
 │ Next follow-up: (in 14 d ▾)      [Save] [Skip]│   ⚠ = identity outside this network →
@@ -452,7 +462,7 @@ D04 delta to `THREAT_MODEL.md` produced by Mara in Sprint R0 (§11).
 
 ### 6.4 Accessibility (WCAG 2.1 AA)
 
-Health and network indicators use icon + text, never colour alone; channel buttons have accessible names including identity ("Email from nick at prof dot me"); minimum 48 dp targets; axe-core on all screens.
+Health and network indicators use icon + text, never colour alone; channel buttons have accessible names including identity ("Email from FMCG account"); minimum 48 dp targets; axe-core on all screens.
 
 ### 6.5 Feedback plan
 
@@ -479,15 +489,17 @@ Toasts for saves/launch failures (SA-U2); sync state from shell header (SA-U3); 
 
 | Type | ID | Item | Owner | Mitigation / next step |
 | :-- | :-- | :-- | :-- | :-- |
-| Risk | R1 | Email from-account selection on Android is not reliably controllable (§4.7) | Jules | Spike S4 in R0; fallback handler-per-network + "Sending from" banner; later Gmail API drafts server-side |
+| Risk | R1 | Email from-account selection on Android is not reliably controllable, and there are six email identities across Google and Microsoft (§4.7) | Jules | Spike S4 per identity in R0; fallback ladder §4.7; "Sending from" banner; later server-side drafts |
 | Risk | R2 | Google Voice may not accept targeted dial/SMS intents | Jules | Spike S1; fallback opens GV app on the contact search |
-| Risk | R3 | Employer policy may forbid storing Work contacts on a personal server | Priya | D18 review in R0; minimal Work profile option |
+| Risk | R3 | ~~Employer policy may forbid storing Work contacts on a personal server~~ Closed 2026-11-23: Nick confirmed it is allowed. Residual: organisation-specific confidentiality (Milford, Baypath) | Priya | D18 note in R0 |
 | Risk | R4 | Client-side graph queries too slow at NFR-1 scale | Bob / Jules | Benchmark in R4; server route fallback |
 | Risk | R5 | Obsidian front matter inconsistent across years | Qz | Mapping UI + dry-run report; manual review queue |
+| Risk | R7 | Two copies of the vault (phone and Google Drive) may have diverged | Qz / Jules | Importer per-note comparison (E1.2); Nick picks the canonical copy in the dry run |
+| Risk | R8 | Vault folder access: the folder picker may not grant a tree on the phone location, and `files.pick` in the bridge picks files, not folders | Jules | Spike S5 in R0; additive `files.pick({ directory: true })` contract change, or zip fallback |
 | Risk | R6 | Touch capture falls below K5 because logging is optional | Eleanor | One-tap outcomes, dismiss logs "Attempted", weekly nudge |
 | Assumption | A1 | M3 (sync) is merged and M4 (capability broker, contacts, external launch) is at least in `5_REVIEW` before R1 build | Janus | Gate in Sprint R1 plan prerequisites |
-| Assumption | A2 | Owner uses Teams + Outlook for Work, Gmail for Personal, a separate address for Professional | Nick | Confirm in R0 (Open question Q2) |
-| Assumption | A3 | The Obsidian vault is the only legacy CRM source (the `baypath-notes` repo is currently a stub: `People/`, `Organizations/`) | Nick | Confirm vault location for the import dry run |
+| Assumption | A2 | ~~Identities~~ Confirmed 2026-11-23: Personal Gmail (personal); USCD (work); FMCG (consulting); Outlook (job search); Baypath; Milford (Finance Committee). Providers per account and Google Voice ownership still TBC | Nick | Q2 |
+| Assumption | A3 | The Obsidian vault is the only legacy CRM source. Location confirmed 2026-11-23: on the phone and in Google Drive (the `baypath-notes` repo is only a stub) | Nick | Closed |
 | Issue | I1 | `core_people` lacks typed phone/email objects | Jules | Additive migration in R1 (JSON shape change is backward-compatible: plain strings accepted and upgraded) |
 | Dependency | D1 | SA-2026-004 `launcher.open` + `<queries>` | Jules | Contract 1.1 lands in R1 or with M4, whichever is first |
 | Dependency | D2 | SA-2026-005 notifications inbox + deep-link router | Jules | Digest (E3.6) slides to R3+ if M5 is late |
@@ -538,7 +550,7 @@ Sprints are two weeks, named **R0–R6** ("Rolodex") to avoid colliding with the
 | :-- | :-- | :-- | :-- |
 | **R0** | Discovery, design, threat model, spikes | PRD approved; D03 + D04 accepted; spike ADRs S1–S4 decided; Obsidian dry-run on a vault copy produces a report | None (paper + throwaway spike branch) |
 | **R1** | Data foundation & import | `rolo_*` migrations + `core_people` typed shapes; contacts list/card/edit; network memberships + lens; Obsidian and phone-contacts import with dry run; Markdown export round-trip | M3 merged; M4 `device.contacts` |
-| **R2** | Launcher & identities | Contract 1.1 `ChannelTarget`; Kotlin launch plugin; resolver v1; all 9 channels open on the phone; cross-network guard; quick-log sheet | M4 `launcher.open`, `<queries>` |
+| **R2** | Launcher & identities | Contract 1.1 `ChannelTarget`; Kotlin launch plugin; resolver v1; all 9 channels open on the phone; cross-context guard; quick-log sheet | M4 `launcher.open`, `<queries>` |
 | **R3** | Cadence & Today | Tiers, health, Today queue, snooze, digest notification, pinned people tiles, templates (non-campaign) | M5 notifications/deep links (digest only) |
 | **R4** | Network navigation | Orgs/affiliations UI, Who-I-know, shared-background panel, overlap finder, relationships, warm-intro paths, scale benchmark | — |
 | **R5** | Campaigns | Campaign templates, targets, stages, sequences feeding Today, dashboard, CSV export; Baypath Sponsors 2027 run as the pilot campaign | — |
@@ -552,11 +564,11 @@ Doc IDs from `core/governance/doc-registry.md`. "—" means no deliverable that 
 
 | Agent | Deliverable | Verified by |
 | :-- | :-- | :-- |
-| **Qz** | This PRD (D02) finalised; D01 for R0 and R1; open questions §12 answered with Nick | Template sections present; Nick approval |
+| **Qz** | This PRD (D02) finalised; D01 for R0 and R1; remaining open questions §12 answered with Nick; context seed list (§2.2) and tag/folder → context mapping drafted from the real vault | Template sections present; Nick approval |
 | **Anansi** | D03 Design Brief: IA (Today, Search, Card, Org, Campaign, Settings), Input Model Contract for every screen, empty/error/loading/offline states, guard sheet, quick-log sheet, token usage (no new tokens without Jane) | Jane audits the Input Model Contract |
-| **Mara** | D04 delta: T-20+ for channel-target injection, import parsing, template XSS, cross-network leak, lost device; each High → control + test | Committed to `THREAT_MODEL.md`; Russ maps tests |
-| **Priya** | D18: Work-network data on personal server; third-party data handling; LinkedIn ToS (no scraping, CSV export OK); data inventory delta sign-off | D18 PASS / conditions |
-| **Jules** | Spikes S1–S4 on the phone (throwaway branch): GV targeted intents, WhatsApp vs Business, Teams call link, Gmail/Outlook from-account; Obsidian vault dry-run parser prototype run on a copy | Spike notes with screen recordings / logcat in PR evidence |
+| **Mara** | D04 delta: T-20+ for channel-target injection, import parsing, template XSS, cross-context leak, lost device; each High → control + test | Committed to `THREAT_MODEL.md`; Russ maps tests |
+| **Priya** | D18: third-party data handling; confidentiality obligations per context (Milford Finance Committee, Baypath donors, FMCG clients); LinkedIn ToS (no scraping, CSV export OK); data inventory delta sign-off. Storing contacts on the mini PC is already approved by Nick | D18 PASS / conditions |
+| **Jules** | Spikes on the phone (throwaway branch): S1 GV targeted intents; S2 WhatsApp vs Business; S3 Teams call link; **S4 from-account for each of the six email identities**; **S5 opening the vault folder on the phone and a zip from Google Drive**; Obsidian dry-run parser prototype run on copies of both vault locations | Spike notes with screen recordings / logcat in PR evidence; per-identity result table |
 | **Arthur** | D16 ADR-005 "Contacts data model: `core_people` + `rolo_*`"; ADR-006 "Identity routing per channel" (from spike results); ADR-007 "Retire Obsidian as CRM source of truth" (proposed) | Nick accepts |
 | **Bob** | D17 memo: client-side graph vs server route; data volume assumptions (NFR-1) | Filed |
 | **Eleanor** | D17 memo: usability of launcher-first flow; K5 risk; lens mental model | Filed |
@@ -667,9 +679,9 @@ PRD section for the sprint's epics final; D03 screens for those epics accepted; 
 | # | Question | Default if unanswered |
 | :-- | :-- | :-- |
 | Q1 | App name: "Rolodex" (`rolo`) or something else? | `rolo` |
-| Q2 | Confirm identities: which email accounts map to Work / Professional / Personal? Is there a separate Professional address, or is it the personal Gmail? Is Google Voice the Professional number? | Work = corporate Outlook + Teams; Professional = Gmail alias + GV; Personal = Gmail + mobile + WhatsApp |
-| Q3 | Where is the live Obsidian vault (the `baypath-notes` repo is a stub)? Which front-matter keys are in use? | Importer mapping UI handles discovery |
-| Q4 | May Work-network contacts be stored on the mini PC? | Store minimal Work profile until Priya clears |
+| Q2 | ~~Which email accounts map to which network?~~ **Answered 2026-11-23:** Personal Gmail = personal; USCD = work; FMCG = consulting; Outlook = job search; Baypath; Milford = Finance Committee. **Still open:** which provider hosts each of FMCG, Baypath and Milford (Google Workspace or Microsoft 365)? Which contexts use the Google Voice number? Does any context use WhatsApp Business? | Contexts seeded as §2.2; providers found in S4 |
+| Q3 | ~~Where is the vault?~~ **Answered:** on the phone and in Google Drive. **Still open:** which copy is canonical if they differ, and which front-matter keys/folders are in use? | Importer compares copies; mapping UI handles key discovery |
+| Q4 | ~~May Work contacts be stored on the mini PC?~~ **Answered: yes.** | — |
 | Q5 | Default cadence tiers (A 14 / B 30 / C 90 / D 365 days)? | As listed |
 | Q6 | Is Baypath Sponsors 2027 the right pilot campaign, and should campaign amounts be tracked? | Yes; optional amount field |
 | Q7 | Should the server send the daily digest (works when phone is off) or the phone (simpler)? | Phone (local notification) in v1 |
@@ -698,4 +710,5 @@ See §11.5.
 
 | Version | Date | Change |
 | :-- | :-- | :-- |
+| 0.2 | 2026-11-23 | Nick's answers: six email identities → per-organisation **contexts** inside networks (`rolo_contexts`), cross-context guard, from-account risk and fallback ladder expanded; vault on phone + Google Drive (dual-copy import, spike S5); mini-PC storage of all contacts approved; Q2–Q4 updated. |
 | 0.1 | 2026-11-22 | First draft: pivot from Obsidian/Markdown CRM to the `rolo` subapp; epics E1–E7; data contract; channel/identity matrix; sprints R0–R6 with agent deliverables. |
