@@ -115,8 +115,8 @@ The dry run suggests a primary membership per person from how the vault links th
 | 5 | FMCG client orgs (list to be confirmed by Nick, Q12) | Professional › FMCG |
 | 6 | Linked to a BBU role note, Bimbo Bakeries USA / Grupo Bimbo, BBU projects or events (former employer) | Professional › General |
 | 7 | In the "LinkedIn Network" note or any other professional list | Professional › General |
-| 8 | Family, friends, scouting and community lists | Personal (Q9) |
-| — | Nothing matched | Professional › General with personal Gmail (Q8 default) |
+| 8 | Family, friends, scouting and community lists | Personal (Q9, decided) |
+| — | Nothing matched | Professional › General: personal Gmail for email, Google Voice for calls and texts (Q8, decided) |
 
 Measured on a 34-note sample of the phone vault (`docs/sprints/contacts-r0/Spikes.md`): **195 of 200 people** get a suggestion from rules 1–7; 5 fall through to the default. Folder signals: `People/` → person, `Organizations/` → organisation, notes at the root → roles, projects, events and lists (§4.4.1).
 
@@ -153,7 +153,7 @@ Measured on a 34-note sample of the phone vault (`docs/sprints/contacts-r0/Spike
 
 | ID | Story | Acceptance criteria |
 | :-- | :-- | :-- |
-| E3.1 | After I return from a launched app, a **quick-log sheet** asks "How did it go?" | Pre-filled channel, identity, timestamp and campaign; one-tap outcomes: *Talked · Left message · No answer · Sent · Scheduled*; optional note; dismiss = log as "Attempted". Logging updates `lastTouchAt` and next due date. |
+| E3.1 | After I return from a launched app, a **quick-log sheet** asks "How did it go?" | Pre-filled channel, identity, timestamp and campaign; one-tap outcomes: *Talked · Left message · No answer · Sent · Scheduled*; optional note; dismiss logs nothing: the person stays due and the row shows a "Log it?" chip until the next day (Q11). Logging updates `lastTouchAt` and next due date. |
 | E3.2 | I can log a touch manually (met in person, event, gift, intro made). | Same fields; type list configurable. |
 | E3.3 | Each membership has a **cadence tier**. | Defaults: A = 14 days, B = 30, C = 90, D = 365, None = no reminders; editable per network. Campaign membership can override with a tighter cadence while the campaign is active. |
 | E3.4 | **Today** view lists who is due, overdue, and upcoming dates. | Sorted by a priority score (overdue ratio × tier weight × campaign boost). Includes birthdays, work anniversaries, follow-up dates I set, and snoozed items returning. Each row has the primary action button. |
@@ -583,7 +583,7 @@ Toasts for saves/launch failures (SA-U2); sync state from shell header (SA-U3); 
 | Risk | R5 | Vault is inconsistent: two person schemas, field names whose meaning differs from Rolodex terms (`network`, `tier`, `affiliations`), role titles inside `former_organizations`, many people existing only as names in list notes (confirmed from samples, §4.4.1) | Qz / Jules | Shape detection per note; semantic mapping table; stubs + data-quality queue; dry run before any write |
 | Risk | R7 | ~~Two copies of the vault may have diverged~~ Closed 2026-11-23: phone copy is canonical; Drive-only notes are reported, not auto-imported | Qz | E1.2 |
 | Risk | R8 | Vault folder access: the folder picker may not grant a tree on the phone location, and `files.pick` in the bridge picks files, not folders | Jules | Spike S5 in R0; additive `files.pick({ directory: true })` contract change, or zip fallback |
-| Risk | R6 | Touch capture falls below K5 because logging is optional | Eleanor | One-tap outcomes, dismiss logs "Attempted", weekly nudge |
+| Risk | R6 | Touch capture falls below K5 because logging is optional | Eleanor | One-tap outcomes, a "Log it?" chip after a dismissed quick-log (Q11), weekly nudge |
 | Assumption | A1 | M3 (sync) is merged and M4 (capability broker, contacts, external launch) is at least in `5_REVIEW` before R1 build | Janus | Gate in Sprint R1 plan prerequisites |
 | Assumption | A2 | ~~Identities~~ Confirmed 2026-11-23: Personal Gmail (personal); USCD (work); FMCG (consulting); Outlook (job search); Baypath; Milford (Finance Committee). Providers confirmed: Milford and Job search on Microsoft, the rest on Google. GV = business line, mobile = personal, WhatsApp = international | Nick | Closed |
 | Assumption | A3 | The Obsidian vault is the only legacy CRM source. Location confirmed 2026-11-23: on the phone and in Google Drive (the `baypath-notes` repo is only a stub) | Nick | Closed |
@@ -771,11 +771,11 @@ PRD section for the sprint's epics final; D03 screens for those epics accepted; 
 | Q4 | ~~May Work contacts be stored on the mini PC?~~ **Answered: yes.** | — |
 | Q5 | ~~Cadence tiers~~ **Answered: A 14 / B 30 / C 90 / D 365 days.** | — |
 | Q6 | ~~Pilot campaign~~ **Answered: Baypath Sponsors 2027, with amounts tracked.** | — |
-| Q8 | Former colleagues, alumni and peers that don't belong to USCD, FMCG, Job search, Baypath or Milford: which email account should they get (personal Gmail, Job-search Outlook, or FMCG)? | A "General" professional context using **personal Gmail** for email and Google Voice for calls/texts |
-| Q9 | Should scouting and other community groups be Personal, or their own context? | Personal |
+| Q8 | ~~Former colleagues, alumni and peers that don't belong to USCD, FMCG, Job search, Baypath or Milford: which email account should they get (personal Gmail, Job-search Outlook, or FMCG)?~~ **Answered 2026-11-27:** a General professional context with **personal Gmail** for email and Google Voice for calls/texts. | — |
+| Q9 | ~~Should scouting and other community groups be Personal, or their own context?~~ **Answered 2026-11-27:** Personal. | — |
 | Q10 | Start/end years for each of your role nodes (BBU and USCD roles), asked once in the import dry run | Asked in the importer |
 | Q7 | Should the server send the daily digest (works when phone is off) or the phone (simpler)? | Phone (local notification) in v1 |
-| Q11 | Quick-log sheet: should dismissing it log an "Attempted" touch (E3.1), or log nothing and keep the person due with a "Log it?" chip (Eleanor, D17)? | Log nothing + chip (protects K5's honesty) |
+| Q11 | ~~Quick-log sheet: should dismissing it log an "Attempted" touch (E3.1), or log nothing and keep the person due with a "Log it?" chip (Eleanor, D17)?~~ **Answered 2026-11-27:** dismiss logs nothing; the person stays due with a "Log it?" chip (E3.1 updated). | — |
 | Q12 | FMCG: which client organisations belong to the FMCG context (rule 5, §2.3)? | Asked in the import review |
 | Q13 | Milford Finance Committee: is there town guidance on records/retention for committee correspondence (D18 C-2)? | Keep Milford context to contact details and touch dates |
 
@@ -803,7 +803,7 @@ See §11.5.
 
 | Version | Date | Change |
 | :-- | :-- | :-- |
-| 0.6 | 2026-11-27 | Sprint R0: §2.3 context seed list and vault → context rules (195/200 people covered on a 34-note sample); Q3 closed; Q11–Q13 added; ADR numbers ADR-006/007/008; R0 artifacts in `docs/sprints/contacts-r0/`. |
+| 0.6 | 2026-11-27 | Sprint R0: §2.3 context seed list and vault → context rules (195/200 people covered on a 34-note sample); Q3 closed; Q11–Q13 added; ADR numbers ADR-006/007/008; R0 artifacts in `docs/sprints/contacts-r0/`. | Nick answered Q8 (General context: personal Gmail + Google Voice), Q9 (scouting/community = Personal), Q11 (dismissing quick-log logs nothing; E3.1 updated).
 | 0.5 | 2026-11-27 | Nick: subapp id is `contacts` (was `rolo`); the vault is migrated once and retired (dry runs → repeatable push → cutover), Supra is the source of truth; unlinked names are deliberate lightweight mentions, not stubs; graph view is a Must (built); soft deletes purged after 14 days with a restore op (ADR-005). New §4.4.0 maps this contract onto the built `contacts_*` collections. |
 | 0.4 | 2026-11-23 | USCD uses Teams, job search is Outlook (confirmed). Real vault analysed from 16 sample notes: new §4.4.1 (five note shapes, field-meaning corrections, role-node and hub-note parsing, stubs, data-quality queue, context suggestions) replaces the guessed mapping; data contract gains `contacts_org_links`, `contacts_lists`, affiliation `via`, org kinds for units/groups/projects/events; E4.9 role view, E4.10 org links; General professional context; Q8–Q10. |
 | 0.3 | 2026-11-23 | Nick's answers: email providers (Milford + Job search Microsoft, rest Google); channel conventions (GV business, mobile personal, WhatsApp international) in §2.2 and resolver; vault phone copy canonical, migrated into the central PocketBase/SQLite database via batched ops; GV risk raised; Q1, Q5, Q6 closed. |

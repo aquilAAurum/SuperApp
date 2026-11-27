@@ -39,7 +39,7 @@ To: Jules, Janus
 | CT-E2.5 | Launch from Today, search, campaign, pinned tile | E | R2/R3 |
 | CT-E2.6 | Quiet hours demote voice and warn | U | R2 (time-zone table) |
 | CT-E2.7 | Missing app → "Not installed" / web fallback | P | R2 |
-| CT-E3.1 | Quick-log after return; dismiss = Attempted | E | R2 |
+| CT-E3.1 | Quick-log after return; dismissing logs nothing and leaves a "Log it?" chip (Q11) | E | R2 |
 | CT-E3.2 | Manual touch log | E | R3 |
 | CT-E3.3 | Tiers A 14 / B 30 / C 90 / D 365; campaign override | U | R3 (cadence math incl. DST) |
 | CT-E3.4 | Today sorted by priority; dates; snoozes return | U + E | R3; ✓ due/upcoming SQL (`reachOutDue`, `upcomingDates`) |

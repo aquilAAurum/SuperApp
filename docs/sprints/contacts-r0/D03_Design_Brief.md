@@ -51,7 +51,7 @@ Today                                   Card                                    
 │ Dates: Lee P. birthday Mar 14     │   └───────────────────────────────────┘   │ How did it go? Teams chat · USCD  │
 │ [Today][People][Network][Campaigns]│                                          │ [Talked][Left msg][No answer]     │
 └───────────────────────────────────┘                                          │ [Sent][Scheduled]   Note [_____]  │
-                                                                               │ [Save]          (dismiss = Attempted)│
+                                                                               │ [Save]  (dismiss: nothing logged)│
 Network                                 Settings › Identities                   └───────────────────────────────────┘
 ┌───────────────────────────────────┐   ┌───────────────────────────────────┐
 │ [Graph][Who I know][Path]         │   │ Work › USCD                       │
@@ -77,7 +77,7 @@ Native `button`/`a`/`input`/`select` only; DOM order = focus order; the subapp o
 | Campaigns | Back → New → campaign rows → (board) stage columns as lists, each target row → stage buttons (no drag) | Back → list → Today |
 | Settings | Back → Contexts → each identity: Test compose → edit → Channel availability → Import & export | Back → Today |
 | Guard sheet | "Use <context> account instead" (default focus) → "Send from … anyway" → Cancel | Back/Escape = Cancel (nothing launched) |
-| Quick-log sheet | Outcome buttons → Note → Save | Back/Escape = log as "Attempted" (E3.1) |
+| Quick-log sheet | Outcome buttons → Note → Save | Back/Escape logs nothing; the Today row shows a "Log it?" chip until tomorrow (E3.1, Q11) |
 
 Visible focus: `:focus-visible { outline: var(--focus-ring) }`; targets ≥ `--tap-target`. Health and stage are never colour-only (icon + text).
 
@@ -100,6 +100,6 @@ Shell token set v1.0.0 (`apps/shell/src/styles/tokens.css`), passed to the subap
 - **No drag and drop** in campaign boards: stage buttons work with touch and D-pad (SA-U4).
 - **Graph view reused** from Supra---Contacts `src/viewer/` (CSP-safe, touch and pinch, tested at ~1,400 nodes).
 - Constraints: SA-C3 (sandbox, SDK only), SA-U1…U5, HB-SEC-04 (no HTML sinks; notes and templates rendered as text/sanitised Markdown).
-- Open for Eleanor: is "dismiss = Attempted" on the quick-log sheet too eager (it inflates K5)? Alternative: dismiss logs nothing and Today keeps the person due.
+- Quick-log dismissal (Q11, Nick 2026-11-27): dismissing logs nothing; the person stays due and the row shows a "Log it?" chip until tomorrow, so K5 counts only real logs.
 
 From: Anansi
