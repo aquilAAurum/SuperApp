@@ -89,6 +89,16 @@ describe('POST /api/sa/ops (version + idempotency hooks)', () => {
     expect(stale.body.server.displayName).toBe('B');
   });
 
+  it('restore brings back a soft-deleted record (ADR-005)', async () => {
+    const id = rid();
+    await api('/api/sa/ops', { token: user, body: { opId: opId(), collection: 'core_people', recordId: id, op: 'create', payload: { displayName: 'A' } } });
+    const del = await api('/api/sa/ops', { token: user, body: { opId: opId(), collection: 'core_people', recordId: id, op: 'delete', baseVersion: 1 } });
+    expect(del.body.record).toMatchObject({ deleted: true, version: 2 });
+    const res = await api('/api/sa/ops', { token: user, body: { opId: opId(), collection: 'core_people', recordId: id, op: 'restore', payload: { displayName: 'A2' }, baseVersion: 2 } });
+    expect(res.status).toBe(200);
+    expect(res.body.record).toMatchObject({ deleted: false, version: 3, displayName: 'A2' });
+  });
+
   it('rejects invalid records with 400 and writes nothing', async () => {
     const id = rid();
     const r = await api('/api/sa/ops', { token: user, body: { opId: opId(), collection: 'core_people', recordId: id, op: 'create', payload: { displayName: '' } } });

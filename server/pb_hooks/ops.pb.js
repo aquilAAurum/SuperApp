@@ -56,19 +56,20 @@ routerAdd(
   $apis.requireAuth("users"),
 );
 
-// Retention (spec): processed_ops kept 30 days; soft-deleted records hard-deleted after 30 days.
+// Retention: processed_ops kept 30 days (spec); soft-deleted records hard-deleted after 14 days
+// (ADR-005; restorable with op "restore" until then).
 cronAdd("sa_retention", "17 3 * * *", () => {
   const { isSyncedCollection } = require(`${__hooks}/lib/pb-store.js`);
-  const cutoff = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString().replace("T", " ");
-  const purge = (name, filter) => {
+  const ago = (days) => new Date(Date.now() - days * 24 * 3600 * 1000).toISOString().replace("T", " ");
+  const purge = (name, filter, cutoff) => {
     for (;;) {
       const batch = $app.findRecordsByFilter(name, filter, "", 200, 0, { cutoff: cutoff });
       if (batch.length === 0) return;
       for (const r of batch) $app.delete(r);
     }
   };
-  purge("processed_ops", "created < {:cutoff}");
+  purge("processed_ops", "created < {:cutoff}", ago(30));
   for (const c of $app.findAllCollections("base")) {
-    if (isSyncedCollection(c)) purge(c.name, "deleted = true && updated < {:cutoff}");
+    if (isSyncedCollection(c)) purge(c.name, "deleted = true && updated < {:cutoff}", ago(14));
   }
 });
