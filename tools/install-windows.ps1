@@ -95,6 +95,16 @@ if (-not $SkipTools) {
 
 $nodeMajor = [int]((& node --version).TrimStart('v').Split('.')[0])
 if ($nodeMajor -lt 22) { throw "Node.js 22 or newer is required (found $(& node --version))." }
+# Node 25+ no longer bundles corepack; install it from npm when missing.
+if (-not (Get-Command corepack -ErrorAction SilentlyContinue)) {
+  Write-Log 'info' 'tool.installing' @{ id = 'corepack (npm)' }
+  & npm install -g corepack
+  if ($LASTEXITCODE -ne 0) { throw 'npm could not install corepack.' }
+  Update-SessionPath
+  $npmBin = Join-Path $env:APPDATA 'npm'
+  if ((Test-Path $npmBin) -and ($env:Path -notlike "*$npmBin*")) { $env:Path = "$env:Path;$npmBin" }
+  if (-not (Get-Command corepack -ErrorAction SilentlyContinue)) { throw 'corepack is still not on PATH after installing it with npm.' }
+}
 & corepack enable
 Push-Location $Repo
 try {
