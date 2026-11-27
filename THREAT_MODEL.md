@@ -1,6 +1,6 @@
 # Threat Model: Shell, bridge, server core and sync — SA-2026-001…003 (Doc ID D04)
 
-Owner: Mara (Security Engineer). Data-inventory review: Priya. Template: Core `core/governance/comm-templates.md` §2. Covers milestones M1–M3; each later milestone appends its new surface before `3_BUILD` (HB-SEC-03).
+Owner: Mara (Security Engineer). Data-inventory review: Priya. Template: Core `core/governance/comm-templates.md` §2. Covers milestones M1–M3 and the Contacts subapp delta (SA-2026-007, §C.2, Sprint R0); each later milestone appends its new surface before `3_BUILD` (HB-SEC-03).
 
 ## A. Scope
 
@@ -55,9 +55,26 @@ Boundaries crossed: B1 iframe → shell (every message validated on the shell si
 | T-18 | Repudiation / integrity | Crash between server apply and local commit duplicates or loses writes | M | H | **High** | Outbox in the durable store, mirror + outbox in one commit, opId replay | unit "killing the shell mid-sync"; e2e "killing the app mid-sync loses nothing" |
 | T-19 | DoS | A subapp floods writes and fills the outbox | L | M | Low | 50 req/s bridge limit per app; SDK backs off on `RATE_LIMITED` | unit `router.test.ts`, `sdk.test.ts` |
 
+### C.2 Contacts subapp (SA-2026-007), Sprint R0 delta
+
+New surface: `contacts_*` collections and the `core_people` mirror hook (built, PR #8); the vault importer (CLI, off-phone); channel launching from contact data (R2: `launcher.open` `ChannelTarget`, Kotlin launch plugin, `<queries>`); message templates and notes rendered in the subapp (R3/R5); bulk third-party personal data on the phone mirror.
+
+| ID | Category | Threat | Likelihood | Impact | Severity | Control | Verifying test |
+| :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- |
+| T-20 | Tampering / Elevation | **Channel-target injection**: a contact field (phone, email, UPN, LinkedIn URL) carries extra URL/intent syntax (`&text=`, `#Intent;…;component=`, `javascript:`) and the launcher opens something other than the intended app or prefills attacker text | M | H | **High** | Subapps pass a typed `ChannelTarget`, never a URL; per-channel JSON Schema (E.164 regex, RFC 5321-lite email, `https://www.linkedin.com/in/` prefix, UPN); the shell builds the intent from a fixed template table, encodes every value, allow-lists schemes and packages; no `component`/`selector` from data | R2: contract tests per channel; fuzz set (Mara) on the template builder; unit "rejects a phone with URL syntax" |
+| T-21 | Info disclosure / Repudiation | **Cross-context send**: a message goes out from the wrong identity (e.g. Milford email to a USCD colleague, personal mobile to a work contact) | M | H | **High** | Resolver takes the identity from the membership's context; cross-context guard sheet requires explicit "Send from … anyway"; every override logged; "Sending from" banner when the mechanism cannot force the account (ADR-007) | R2: Russ K3 adversarial matrix (0 wrong-identity sends); unit resolver hard filters |
+| T-22 | Tampering / DoS | **Import parsing**: hostile or malformed vault content (YAML bombs, huge files, odd encodings, path tricks in a Drive zip) crashes or misleads the importer | L | M | Medium | Importer runs off-phone on the owner's PC; YAML parsed with the `core` schema (no custom tags), errors reported per note, not thrown; vault walk skips dot-folders and Templates; no zip extraction in the importer (S5 zip path would add size/entry caps and no path use from the archive) | Supra---Contacts `tests/vault.test.ts` "bad YAML is reported, not thrown"; R1: size/entry caps if an on-phone importer is built |
+| T-23 | Tampering | **Stale vault overwrites app data** after cutover (an old copy re-pushed deletes or reverts edits made in Supra) | M | H | **High** | `cutover` record in `contacts_imports`; importer refuses to push afterwards (no override); before cutover every removal is a soft delete restorable for 14 days (ADR-005, ADR-008) | Supra---Contacts `tests/supra.test.ts` "cutover … push is refused"; `tools/pb-integration.sh` (real PocketBase): refused push, server untouched |
+| T-24 | Elevation (XSS) | **Stored XSS** through notes, imported note bodies, templates or merge fields rendered in the subapp | M | M | Medium | No HTML sinks (ESLint, HB-SEC-04); Markdown rendered with raw HTML disabled; merge fields inserted as text; subapp CSP `connect-src 'none'` limits impact; graph viewer already uses `textContent` only | Lint; R3 unit "template with <script> renders as text"; Supra---Contacts `tests/graph.test.ts` "no HTML sinks" |
+| T-25 | Info disclosure | **Lost or shared phone** exposes the whole network (third-party names, numbers, notes) | L | H | Medium | SQLCipher mirror with Keystore key (ADR-004); biometric unlock recommended on for `contacts` (M4); no message bodies stored; graph exports to files use `--no-contact-info` when shared | Step 0 backups off; D10 manual SQLCipher check |
+| T-26 | Tampering | **`core_people` divergence**: another subapp edits a contact's `core_people` twin and the mirror silently overwrites it, or the Contacts app trusts edited core data | L | M | Low | Single writer: only the server hook writes `core_people` for contact-owned ids; the Contacts subapp gets `core.people.read` only (ADR-006); edits happen in `contacts_*` | Integration "mirror each contact into core_people … through delete and restore"; R1: manifest scope review (Jane) |
+| T-27 | Info disclosure | **Package visibility expansion**: `<queries>` entries for handler apps let the shell (and a compromised shell) enumerate more installed apps | L | L | Low | Only the packages accepted in ADR-007; Step 0 allow-list checks the manifest | Step 0 manifest check (R2) |
+| T-28 | Info disclosure | **Identifiers in logs**: launch instrumentation leaks numbers, addresses or message bodies into diagnostics | M | M | Medium | `contacts.launch` events carry channel, handler, network/context ids, ranks and timings only; logger redaction (HB-DATA-03) extended with E.164/email patterns | R2: unit "launch log carries no address or number" |
+
+
 ## D. Data Inventory Delta (Priya)
 
-See [`project-profile.md` §5](project-profile.md). New in M3: encrypted local mirror and outbox of synced records (Android), IndexedDB copy in browser builds. New in M1–M2: server token and device id (Keystore), `core_devices` row, in-memory diagnostics buffers, `processed_ops` ledger (30-day retention, no payload beyond the op result).
+See [`project-profile.md` §5](project-profile.md). New with SA-2026-007 (R0): third-party contact data in `contacts_*` and `core_people` (owner-only; soft deletes purged after 14 days, ADR-005), the importer's local SQLite file on the machine that runs the migration (git-ignored; delete after cutover), and identities (the owner's own addresses and numbers, R1). No message content is stored; interactions hold date, channel, outcome and a short note. New in M3: encrypted local mirror and outbox of synced records (Android), IndexedDB copy in browser builds. New in M1–M2: server token and device id (Keystore), `core_devices` row, in-memory diagnostics buffers, `processed_ops` ledger (30-day retention, no payload beyond the op result).
 
 ## E. Residual Risk & Sign-off
 
@@ -68,3 +85,5 @@ See [`project-profile.md` §5](project-profile.md). New in M3: encrypted local m
 | Shell `connect-src` allows `https:` and `http:` because the server address is user-configured; restriction is enforced in code by the URL policy, not by CSP. | Mara | Re-evaluate in M6 (consider pinning to the configured origin at runtime via a native allow-list) |
 | Web/E2E builds keep secrets in memory only; there is no Keystore in the browser. Not a production path. | Mara | Accepted |
 | PocketBase integration test (T-10–T-12) runs only in CI, not in the authoring environment of Sprint 1. | Kumi Wai | First green CI run |
+| SA-2026-007: Gmail and Outlook compose intents have no documented from-account selector; until the S4 spike results exist, T-21 relies on the guard sheet and a "Sending from" banner rather than a forced account. | Mara | ADR-007 decision (end of R0) |
+| SA-2026-007: the importer's local SQLite file holds the whole network in plain SQLite on the owner's PC during migration. | Priya | Cutover (delete the file afterwards; Supra---Contacts runbook-migration §4) |
