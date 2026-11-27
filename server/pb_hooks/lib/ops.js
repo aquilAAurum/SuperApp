@@ -45,8 +45,9 @@ function validateOp(op) {
   if (typeof op.opId !== "string" || !OP_ID.test(op.opId)) return err(400, "INVALID_PARAMS", "opId must be 8-64 chars [A-Za-z0-9-]");
   if (typeof op.collection !== "string" || !COLLECTION.test(op.collection)) return err(400, "INVALID_PARAMS", "invalid collection");
   if (typeof op.recordId !== "string" || !RECORD_ID.test(op.recordId)) return err(400, "INVALID_PARAMS", "recordId must be 15 chars a-z0-9");
-  if (["create", "update", "delete"].indexOf(op.op) < 0) return err(400, "INVALID_PARAMS", "op must be create, update or delete");
-  if (op.op !== "delete" && !isObject(op.payload)) return err(400, "INVALID_PARAMS", "payload must be an object");
+  if (["create", "update", "delete", "restore"].indexOf(op.op) < 0) return err(400, "INVALID_PARAMS", "op must be create, update, delete or restore");
+  if ((op.op === "create" || op.op === "update") && !isObject(op.payload)) return err(400, "INVALID_PARAMS", "payload must be an object");
+  if (op.op === "restore" && op.payload !== undefined && !isObject(op.payload)) return err(400, "INVALID_PARAMS", "payload must be an object");
   if (op.op !== "create" && (typeof op.baseVersion !== "number" || op.baseVersion < 1 || Math.floor(op.baseVersion) !== op.baseVersion)) {
     return err(400, "INVALID_PARAMS", "baseVersion must be a positive integer");
   }
@@ -65,6 +66,8 @@ function cleanPayload(payload) {
 
 /**
  * Applies one outbox op exactly once.
+ *   restore (ADR-005): un-deletes a soft-deleted record (deleted=false), optionally applying a payload,
+ *   checked against baseVersion like update/delete. Only possible until the retention job purges it.
  *   store.isSynced(collection) → bool
  *   store.findProcessed(opId) → { owner, status, body } | null
  *   store.findRecord(collection, id) → plain record | null
@@ -108,10 +111,13 @@ function applyOp(store, op, ctx) {
     res = err(404, "NOT_FOUND", "record does not exist on the server");
   } else if (existing.deleted && op.op === "update") {
     res = err(404, "NOT_FOUND", "record was deleted on the server", { server: existing });
+  } else if (!existing.deleted && op.op === "restore") {
+    res = err(409, "CONFLICT", "record is not deleted", { server: existing });
   } else if (existing.version !== op.baseVersion) {
     res = err(409, "CONFLICT", "version conflict", { server: existing, baseVersion: op.baseVersion });
   } else {
     var patch = op.op === "delete" ? { deleted: true } : cleanPayload(op.payload);
+    if (op.op === "restore") patch.deleted = false;
     if (ctx.deviceId) patch.origin_device = ctx.deviceId;
     res = saved(store.update(op.collection, op.recordId, patch));
   }

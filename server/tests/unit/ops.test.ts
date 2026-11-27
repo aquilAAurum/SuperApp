@@ -100,6 +100,19 @@ describe('applyOp', () => {
     expect(upd).toMatchObject({ status: 404, body: { code: 'NOT_FOUND' } });
   });
 
+  it('restore un-deletes a soft-deleted record, applies its payload and is version-checked (ADR-005)', () => {
+    applyOp(store, create(), ctx);
+    applyOp(store, { opId: 'op-delete-0002', collection: 'core_people', recordId: 'abcdefghij12345', op: 'delete', baseVersion: 1 }, ctx);
+    const stale = applyOp(store, { opId: 'op-restore-0001', collection: 'core_people', recordId: 'abcdefghij12345', op: 'restore', baseVersion: 1 }, ctx);
+    expect(stale).toMatchObject({ status: 409, body: { code: 'CONFLICT' } });
+    const res = applyOp(store, { opId: 'op-restore-0002', collection: 'core_people', recordId: 'abcdefghij12345', op: 'restore', payload: { displayName: 'Ada R.', deleted: true }, baseVersion: 2 }, ctx);
+    expect(res.status).toBe(200);
+    expect(res.body.record).toMatchObject({ deleted: false, version: 3, displayName: 'Ada R.', origin_device: ctx.deviceId });
+    const again = applyOp(store, { opId: 'op-restore-0003', collection: 'core_people', recordId: 'abcdefghij12345', op: 'restore', baseVersion: 3 }, ctx);
+    expect(again).toMatchObject({ status: 409, body: { message: 'record is not deleted' } });
+    expect(applyOp(store, { opId: 'op-restore-0004', collection: 'core_people', recordId: 'missing00000000', op: 'restore', baseVersion: 1 }, ctx).status).toBe(404);
+  });
+
   it('update of a missing record → 404', () => {
     expect(applyOp(store, { opId: 'op-update-0004', collection: 'core_people', recordId: 'missing00000000', op: 'update', payload: {}, baseVersion: 1 }, ctx).status).toBe(404);
   });
@@ -119,6 +132,8 @@ describe('applyOp', () => {
     [{ ...create(), recordId: 'UPPER' }, 'recordId'],
     [{ ...create(), op: 'upsert' }, 'op must'],
     [{ ...create(), payload: [] }, 'payload'],
+    [{ opId: 'op-restore-0005', collection: 'core_people', recordId: 'abcdefghij12345', op: 'restore', payload: 'x', baseVersion: 2 }, 'payload'],
+    [{ opId: 'op-restore-0006', collection: 'core_people', recordId: 'abcdefghij12345', op: 'restore' }, 'baseVersion'],
     [{ opId: 'op-update-0005', collection: 'core_people', recordId: 'abcdefghij12345', op: 'update', payload: {} }, 'baseVersion'],
   ])('rejects invalid ops with 400 (%#)', (op, msg) => {
     const res = applyOp(store, op, ctx);
