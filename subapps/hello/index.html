@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Hello</title>
+    <style>
+      :root { color-scheme: light dark; --gap: 12px; --accent: #2952cc; --muted: #5a6270; --ok: #1e7a3d; --bad: #b3261e; }
+      :root[data-theme='dark'] { --accent: #8fa8ff; --muted: #a3aab6; --ok: #7dd99a; --bad: #ffb4ab; }
+      body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; }
+      button { min-height: 48px; padding: 0 16px; margin: 0 8px 8px 0; font: inherit; border-radius: 6px; }
+      button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+      dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px var(--gap); }
+      dt { color: var(--muted); }
+      dd { margin: 0; overflow-wrap: anywhere; }
+      input { min-height: 48px; font: inherit; padding: 0 8px; margin: 0 8px 8px 0; }
+      label { display: block; font-weight: 600; margin-bottom: 4px; }
+      .pass { color: var(--ok); } .fail { color: var(--bad); }
+    </style>
+  </head>
+  <body>
+    <h1>Hello from a subapp</h1>
+    <p id="status" role="status">Connecting to the shell…</p>
+    <dl id="context"></dl>
+    <div>
+      <button type="button" id="btn-title">Set title</button>
+      <button type="button" id="btn-caps">Show capabilities</button>
+      <button type="button" id="btn-isolation">Run isolation check</button>
+      <button type="button" id="btn-denied">Try a denied call</button>
+      <button type="button" id="btn-close">Close app</button>
+    </div>
+    <h2>Notes</h2>
+    <form id="note-form">
+      <label for="note-text">New note</label>
+      <input id="note-text" maxlength="200" autocomplete="off" />
+      <button type="submit">Add note</button>
+    </form>
+    <div>
+      <button type="button" id="btn-bulk">Write 100 notes</button>
+      <button type="button" id="btn-edit-first">Edit first note</button>
+    </div>
+    <p>Notes: <output id="notes-count" data-testid="notes-count">0</output></p>
+    <p id="sync-failed" role="alert" data-testid="sync-failed" hidden></p>
+    <ul id="notes" data-testid="notes"></ul>
+    <h2>Results</h2>
+    <ul id="results" data-testid="hello-results"></ul>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,40 @@
+{
+  "name": "@superapp/shell",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Capacitor Android shell: launcher, identity, subapp host and bridge router.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "pnpm run build:builtins && vite build",
+    "preview": "vite preview --port 4173 --strictPort",
+    "typecheck": "svelte-check --tsconfig ./tsconfig.json --fail-on-warnings",
+    "test:e2e": "playwright test --trace off",
+    "cap:sync": "cap sync android",
+    "build:builtins": "pnpm --filter @superapp/subapp-hello build"
+  },
+  "dependencies": {
+    "@aparajita/capacitor-secure-storage": "^8.0.1",
+    "@capacitor-community/sqlite": "^8.1.1",
+    "@capacitor/android": "~8.6.2",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/core": "~8.6.2",
+    "@capacitor/device": "^8.0.3",
+    "@capacitor/network": "^8.0.1",
+    "@capacitor/preferences": "^8.0.1",
+    "@superapp/contracts": "workspace:*",
+    "pocketbase": "^0.29.0",
+    "svelte": "^5.59.1"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.14.0",
+    "@capacitor/cli": "~8.6.2",
+    "@playwright/test": "1.63.0",
+    "@sveltejs/vite-plugin-svelte": "^7.3.1",
+    "@types/node": "^22.20.5",
+    "happy-dom": "^21.0.4",
+    "svelte-check": "^4.7.8",
+    "vite": "^8.3.8"
+  }
+}

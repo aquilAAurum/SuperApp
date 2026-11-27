@@ -1,0 +1,49 @@
+# SAST (HB-SEC-01). Based on the "CodeQL Advanced" workflow Nick added from the GitHub UI
+# (fdb1fa5), adjusted to Core v4: actions pinned to commit SHAs (HB-SUP-01), least-privilege
+# permissions, security-extended queries, and triggers for main, agent branches and PRs.
+# Results upload to Security → Code scanning.
+name: CodeQL
+
+on:
+  push:
+    # Working branches are covered by pull_request events (running both doubled CI load).
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '26 17 * * 4'
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-24.04
+    permissions:
+      security-events: write # upload results
+      packages: read # private CodeQL packs
+      actions: read # required in private repositories
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: actions
+            build-mode: none
+          - language: java-kotlin
+            build-mode: none # analyzes the Android Java sources without a Gradle build
+          - language: javascript-typescript
+            build-mode: none
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          queries: security-extended
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          category: '/language:${{ matrix.language }}'

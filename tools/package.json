@@ -1,0 +1,12 @@
+{
+  "name": "@superapp/tools",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Bundle packer, Step 0 validation and deploy helpers.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "dependencies": {
+    "@superapp/contracts": "workspace:*",
+    "fflate": "^0.8.3"
+  }
+}

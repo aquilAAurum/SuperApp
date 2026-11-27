@@ -1,0 +1,67 @@
+# HB-REL-01 (tag-only CI builds), HB-REL-02 (signed APK), HB-SUP-06 (SBOM), HB-SUP-07 (provenance).
+# Owner: Theo. Signing material lives only in the protected "release" environment.
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    environment: release # requires Nick's approval (environment protection rules)
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version-file: .nvmrc
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+      - name: Build web assets and sync Capacitor
+        run: pnpm build && pnpm --filter @superapp/shell exec cap sync android
+      - name: Signed release APK
+        working-directory: apps/shell/android
+        env:
+          SUPERAPP_KEYSTORE_B64: ${{ secrets.SUPERAPP_KEYSTORE_B64 }}
+          SUPERAPP_KEYSTORE_PASSWORD: ${{ secrets.SUPERAPP_KEYSTORE_PASSWORD }}
+          SUPERAPP_KEY_ALIAS: ${{ secrets.SUPERAPP_KEY_ALIAS }}
+          SUPERAPP_KEY_PASSWORD: ${{ secrets.SUPERAPP_KEY_PASSWORD }}
+        run: |
+          export JAVA_HOME="$JAVA_HOME_21_X64"
+          export SUPERAPP_KEYSTORE_PATH="$RUNNER_TEMP/release.keystore"
+          echo "$SUPERAPP_KEYSTORE_B64" | base64 -d > "$SUPERAPP_KEYSTORE_PATH"
+          VERSION="${GITHUB_REF_NAME#v}"
+          CODE=$(echo "$VERSION" | awk -F. '{ printf "%d%03d%03d", $1, $2, $3 }')
+          ./gradlew --no-daemon assembleRelease -PversionName="$VERSION" -PversionCode="$CODE"
+          rm -f "$SUPERAPP_KEYSTORE_PATH"
+      - name: Collect artifacts
+        run: |
+          mkdir -p dist
+          cp apps/shell/android/app/build/outputs/apk/release/app-release.apk "dist/superapp-${GITHUB_REF_NAME}.apk"
+          tar -czf "dist/superapp-server-${GITHUB_REF_NAME}.tar.gz" -C server pb_migrations pb_hooks
+          cp subapps/hello/release/*.zip subapps/hello/release/*.sha256 dist/
+          (cd dist && sha256sum * > SHA256SUMS)
+      - name: SBOM (CycloneDX)
+        uses: anchore/sbom-action@55dc4ee22412511ee8c3142cbea40418e6cec693 # v0.17.8
+        with:
+          format: cyclonedx-json
+          output-file: dist/sbom.cdx.json
+      - name: Build provenance
+        uses: actions/attest-build-provenance@ef244123eb79f2f7a7e75d99086184180e6d0018 # v1.4.4
+        with:
+          subject-path: |
+            dist/*.apk
+            dist/*.tar.gz
+            dist/*.zip
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --generate-notes --verify-tag

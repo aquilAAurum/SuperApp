@@ -1,0 +1,11 @@
+{
+  "name": "@superapp/server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "PocketBase migrations, JS hooks and their tests. pb_hooks/ and pb_migrations/ are CommonJS for the JSVM.",
+  "license": "UNLICENSED",
+  "type": "commonjs",
+  "scripts": {
+    "test:integration": "vitest run --config vitest.integration.config.mts"
+  }
+}
