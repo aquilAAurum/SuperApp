@@ -121,6 +121,29 @@ jobs:
           path: apps/shell/android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
 
+  windows-install:
+    name: Windows install script (mini PC setup)
+    runs-on: windows-2025
+    env:
+      PB_SUPERUSER_EMAIL: ci-admin@example.test
+      PB_SUPERUSER_PASSWORD: ci-admin-password-123 # throwaway, CI-only data dir
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version-file: .nvmrc
+      - name: Run tools/install-windows.ps1 (no winget, no service, no Tailscale)
+        shell: powershell
+        run: .\tools\install-windows.ps1 -InstallDir "$env:RUNNER_TEMP\pocketbase" -SkipTools -SkipTailscale -NoService
+      - name: Start the installed PocketBase and run the integration tests against it
+        shell: powershell
+        run: |
+          $dir = "$env:RUNNER_TEMP\pocketbase"
+          Start-Process -FilePath "$dir\pocketbase.exe" -ArgumentList @('serve', '--http', '127.0.0.1:8090', '--dir', "$dir\pb_data", '--migrationsDir', "$dir\pb_migrations", '--hooksDir', "$dir\pb_hooks") -RedirectStandardOutput "$dir\out.log" -RedirectStandardError "$dir\err.log"
+          for ($i = 0; $i -lt 40; $i++) { try { if ((Invoke-RestMethod http://127.0.0.1:8090/api/health).code -eq 200) { break } } catch { Start-Sleep -Milliseconds 500 } }
+          corepack pnpm --filter @superapp/server test:integration
+          if ($LASTEXITCODE -ne 0) { Get-Content "$dir\out.log", "$dir\err.log"; exit 1 }
+
   dependency-review:
     name: Dependency review
     if: github.event_name == 'pull_request'

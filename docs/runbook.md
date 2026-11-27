@@ -4,14 +4,29 @@ Owner: Theo (Release & SRE). Status: draft for Sprint 1; SLOs become binding at 
 
 ## 1. Mini PC setup (spec §Server setup)
 
-1. **Tailscale:** install, sign in, enable MagicDNS and HTTPS certificates. Expose PocketBase with Tailscale Serve so the phone uses `https://<minipc>.<tailnet>.ts.net`:
-   `tailscale serve --bg --https=443 http://127.0.0.1:8090`
-2. **PocketBase:** download the Windows x64 build of the version pinned in `tools/pocketbase-ci.sh` into `C:\superapp\pocketbase\`. Bind it to loopback only: `pocketbase.exe serve --http 127.0.0.1:8090`.
-3. **Service:** install with NSSM as `superapp-pocketbase`, startup Automatic, restart on failure.
-4. **Schema and hooks:** from a checkout of the release tag, run `pwsh tools/deploy-server.ps1` (copies `server/pb_migrations` and `server/pb_hooks`, restarts the service; migrations apply on start).
-5. **Owner account:** create the superuser in the admin UI, then the owner in `users`.
-6. **Integrations (M6):** add Home Assistant, Jellyfin and Anthropic entries in `core_integrations` via the admin UI only. Never put these values in the repo or on the phone.
-7. **Windows:** disable sleep; BIOS "restore on AC power loss"; Windows Update active hours with restarts at 04:00.
+**Automated:** from a checkout of `main`, in PowerShell **run as administrator**:
+
+```powershell
+git clone https://github.com/aquilAAurum/SuperApp.git C:\superapp\repo
+cd C:\superapp\repo
+powershell -ExecutionPolicy Bypass -File tools\install-windows.ps1
+```
+
+`tools/install-windows.ps1` (safe to re-run; CI job "Windows install script" exercises it on every PR):
+
+1. Installs Git, Node.js LTS (+ pnpm via corepack), Tailscale and NSSM with `winget`; `-WithAndroid` adds JDK 21 and Android Studio.
+2. Downloads PocketBase (pinned version), verifies its SHA-256 against the release checksum, installs to `C:\superapp\pocketbase\`.
+3. Copies `server/pb_migrations` and `server/pb_hooks`, runs `migrate up`.
+4. Prompts for and creates the PocketBase superuser.
+5. Registers the NSSM service `superapp-pocketbase`: automatic start, restart on failure, `127.0.0.1:8090` only, logs in `C:\superapp\pocketbase\logs`.
+6. If Tailscale is signed in, runs `tailscale serve --bg --https=443 http://127.0.0.1:8090` and prints the phone's server URL. If not: run `tailscale up`, enable MagicDNS and HTTPS certificates in the Tailscale admin console, and re-run the script.
+
+**Manual steps that stay manual:**
+
+- **Owner account:** in the admin UI (`http://127.0.0.1:8090/_/`), create the owner in `users`.
+- **Integrations (M6):** add Home Assistant, Jellyfin and Anthropic entries in `core_integrations` via the admin UI only. Never put these values in the repo or on the phone.
+- **Windows:** disable sleep; BIOS "restore on AC power loss"; Windows Update active hours with restarts at 04:00.
+- **Later deploys:** `pwsh tools/deploy-server.ps1` (copies migrations and hooks, restarts the service).
 
 ## 2. Phone
 
