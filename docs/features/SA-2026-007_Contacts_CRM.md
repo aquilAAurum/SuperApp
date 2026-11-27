@@ -2,10 +2,10 @@
 
 - **Feature ID:** SA-2026-007
 - **Doc ID:** D02 (PRD)   · **Producer:** Qz   · **Consumers:** Anansi, Mara, Priya, Jules, Kumi Wai, Russ, Jane, Theo, Arthur, Janus, Board
-- **Version:** 0.4   · **Status:** Proposal   · **Date:** 2026-11-23
+- **Version:** 0.5   · **Status:** Proposal; data layer and vault migration built (Supra---Contacts)   · **Date:** 2026-11-27
 - **Owner(s):** Qz (content), Nick (approval)   · **T-Shirt Size:** XL (delivered as six sprint-sized increments, §11)
 - **RICE:** R:1 | I:3 | C:70% | E:3 = 0.7 (single-owner product; Impact 3 because it replaces a daily-use tool)
-- **Subapp id:** `rolo` (collections `rolo_*`, events `rolo.*`, deep links `superapp://rolo/...`)
+- **Subapp id:** `contacts` (collections `contacts_*`, events `contacts.*`, deep links `superapp://contacts/...`)
 - **Depends on:** SA-2026-003 (M3 data & sync), SA-2026-004 (M4 capability broker, contacts, external launch), SA-2026-005 (M5 notifications inbox, deep links, bus)
 - **Planning only.** This document is the holistic spec for later build sprints. No code is part of this deliverable.
 
@@ -41,11 +41,11 @@ The Obsidian vault is imported once (with a dry-run diff), then retired as the s
 
 | ID | KPI | Target | How measured |
 | :-- | :-- | :-- | :-- |
-| K1 | **Taps to reach** a contact from the launcher home | ≤ 3 taps (search/open → primary channel), ≤ 2 from Today queue | E2E step count; instrumented `rolo.launch` events |
-| K2 | **Time to channel open** (tap primary action → external app foreground) | p50 < 1.0 s, p95 < 2.0 s on the phone | `rolo.launch` timing in Diagnostics |
+| K1 | **Taps to reach** a contact from the launcher home | ≤ 3 taps (search/open → primary channel), ≤ 2 from Today queue | E2E step count; instrumented `contacts.launch` events |
+| K2 | **Time to channel open** (tap primary action → external app foreground) | p50 < 1.0 s, p95 < 2.0 s on the phone | `contacts.launch` timing in Diagnostics |
 | K3 | **Wrong-identity sends** (channel/from-account outside the membership's context without explicit override) | 0 | Guard log; Russ adversarial tests |
 | K4 | **Cadence adherence** for Tier A contacts | ≥ 85 % within cadence after 8 weeks of use | Cadence report |
-| K5 | **Touch capture rate** (launches that end with a logged touch) | ≥ 80 % | `rolo_interactions` / `rolo.launch` |
+| K5 | **Touch capture rate** (launches that end with a logged touch) | ≥ 80 % | `contacts_interactions` / `contacts.launch` |
 | K6 | **Import fidelity** of the Obsidian vault | 100 % of notes accounted for (imported, merged or explicitly skipped), 0 silent field loss | Importer report vs vault file count |
 | K7 | Shell KPIs inherited (Profile §1) | Handshake < 500 ms; zero lost/duplicated writes; no secrets on phone | Existing CI + M3 tests |
 
@@ -111,7 +111,7 @@ The email addresses themselves are entered in Settings (E7.1), not written in th
 | ID | Story | Acceptance criteria |
 | :-- | :-- | :-- |
 | E1.1 | As the owner I can create, edit, merge and archive a contact with CRM attributes (§4.4). | Create/edit offline → synced with no duplicates (M3 guarantees). Merge keeps all memberships, affiliations, interactions; produces a merge record. Archive = soft delete. |
-| E1.2 | I can migrate my Obsidian vault (People + Organizations folders) into the **central database**: PocketBase on the mini PC, which stores its data in SQLite and is the single source of truth (SA-C5). The **phone copy of the vault is canonical** (most recent, confirmed by Nick 2026-11-23); it is picked via the Android folder picker (SAF tree). The Google Drive copy is only a fallback source (zip). | The importer reads the phone copy only. Optional: a report of notes that exist only in the Drive copy, so nothing is lost; they are imported only if I tick them. Writes go through the normal path (outbox → `/api/sa/ops`) in batches that respect the bridge rate limit (see eval `2026-11-21_jules_bulk-writes-rate-limited`), so a large import is idempotent and resumable after a crash. After the import the vault is read-only, then archived (§9.1); the central database is the only place contacts are edited. Dry run shows counts: new / matched / conflicts / skipped with reasons. Nothing is written until I confirm. Note shapes and fields are detected and mapped per §4.4.1 (editable mapping table); people named only in lists become stubs in a data-quality queue; unmapped keys go to `customFields`; note body becomes the contact's notes; `[[wikilinks]]` to org notes become affiliations; links to people become relationships. Report lists every source file (K6). |
+| E1.2 | I can migrate my Obsidian vault (People + Organizations folders, role and hub notes) into the **central database** (PocketBase on the mini PC, SQLite underneath, single source of truth, SA-C5) **once**, after dry runs, and then retire the vault. The phone copy is canonical; the importer runs on a PC against a current copy (Drive for desktop mirror of `Network`, or the folder copied from the phone). (v0.5: built as the `supra-contacts` CLI in `aquilAAurum/Supra---Contacts`; runbook `docs/runbook-migration.md`.) | `import` reports counts, data issues and the **newest note's modification time** (to confirm the copy matches the phone). `push --dry-run` shows new / changed / removed before anything is written. Writes go through `/api/sa/ops` with deterministic record ids and opIds, so pushes are idempotent and resumable; pushes are repeatable until **cutover**. Before cutover, notes removed from the vault are soft-deleted (restorable for 14 days, ADR-005) and restored if they come back. `cutover` makes a final push, records a `cutover` row in `contacts_imports`, and from then on `push` is refused (no override), so a stale vault can never overwrite app edits; the vault is made read-only and archived (§9.1). Note shapes and fields are detected per §4.4.1; unmapped keys are kept (`entity_attributes`, JSON front matter); `[[wikilinks]]` become typed edges (affiliations, relationships, org links); every source file is accounted for (K6). |
 | E1.3 | I can import phone contacts (`device.contacts.read`) and Google / LinkedIn CSV exports. | Consent sheet on first use. Matching by normalised E.164 phone, lower-cased email, then fuzzy name + org with manual review. No automatic overwrite of a field I edited. |
 | E1.4 | I can export everything to Markdown (Obsidian-compatible front matter) and CSV. | Round-trip test: export → re-import into an empty instance → zero diffs. |
 | E1.5 | Duplicate detection runs on create/import. | Suggests merges with a confidence score; never auto-merges. |
@@ -124,7 +124,7 @@ The email addresses themselves are entered in Settings (E7.1), not written in th
 | E2.2 | Tapping a channel opens the external app with the target pre-filled. | Phone → dialer with number (ACTION_DIAL, no `CALL_PHONE`). SMS → messaging app with number. Google Voice → GV app targeted. WhatsApp → chat with E.164 number. Teams → chat/call with UPN. Email → compose with to/subject from the chosen from-account (§4.7). LinkedIn → profile URL in the LinkedIn app. |
 | E2.3 | "Why this channel?" explains the resolver's choice. | Shows the top 3 rules that fired (e.g. "Work network · weekday 10:12 · last 4 touches via Teams"). |
 | E2.4 | Long-press a channel to set it as the preferred channel for this contact in this network. | Preference stored on the membership; resolver honours it next time. |
-| E2.5 | Launch from anywhere: Today queue, search results, campaign list, and a shell launcher shortcut ("pinned people"). | Pinned people appear in the SuperApp home grid as external-style tiles that deep link to `superapp://rolo/contact/:id?action=primary`. |
+| E2.5 | Launch from anywhere: Today queue, search results, campaign list, and a shell launcher shortcut ("pinned people"). | Pinned people appear in the SuperApp home grid as external-style tiles that deep link to `superapp://contacts/contact/:id?action=primary`. |
 | E2.6 | Quiet hours and time zones. | If the contact's local time is outside their (or default) reachable window, the resolver demotes voice channels and shows "It's 22:40 for Sam" before launching. |
 | E2.7 | Missing app fallback. | If a target app isn't installed, the channel shows "Not installed" and falls back to the web URL where one exists (Teams, WhatsApp, LinkedIn, Gmail) or is hidden (Google Voice). |
 | E2.8 | Message templates. | Choosing "Text with template" fills a body from a template (campaign or personal) with merge fields (`{firstName}`, `{company}`, `{lastTopic}`). Body is passed only to channels that accept prefill (SMS, WhatsApp, email, Teams chat). |
@@ -155,7 +155,7 @@ The email addresses themselves are entered in Settings (E7.1), not written in th
 | E4.7 | **Warm-intro path** to a target person or org. | Shortest paths (≤ 3 hops) weighted by edge strength and recency of my touches with the first hop; shows "Ask Priya (strong, talked 9 days ago) → she worked with Lee at Acme 2016–2019". One tap launches a templated intro request to the first hop. |
 | E4.9 | **Role view (org chart):** for each of my roles, see who I reported to, my direct reports, and colleagues by function, each with the primary action. | Built from imported role nodes (§4.4.1) and editable; colleagues show "worked with you as <role>". |
 | E4.10 | **Org-to-org links:** partners, vendors, carriers, parent/owner. | Org page lists linked orgs and "who I know there", e.g. people at USCD's vendors. |
-| E4.8 | Network map view (optional, Should). | Simple org-centric cluster list on phone (no force graph required in v1); graph view is a Could for larger screens. |
+| E4.8 | **Graph view** of people, organisations and my roles/projects/events (the Obsidian graph, kept by requirement). | Built (v0.5) as a CSP-safe canvas view: fold single-link nodes into hubs, focus 1–3 hops, path finder ("how am I connected to…"), connection filters, colour by type / cluster / reach-out / seniority / relationship, search, unlinked-names layer, touch and pinch. 60 fps at ~1,400 nodes. Reused by the subapp. |
 
 #### E5 — Campaigns
 
@@ -189,9 +189,9 @@ The email addresses themselves are entered in Settings (E7.1), not written in th
 
 | Priority | Scope |
 | :-- | :-- |
-| **Must** | E1.1–E1.4, E2.1–E2.7, E3.1–E3.5, E4.1–E4.4, E5.1–E5.3, E6.1–E6.3, E7.1–E7.3, cross-context guard, Markdown export |
+| **Must** | E1.1–E1.4, E2.1–E2.7, E3.1–E3.5, E4.1–E4.4, E4.8, E5.1–E5.3, E6.1–E6.3, E7.1–E7.3, cross-context guard, Markdown export |
 | **Should** | E1.5, E2.8, E3.6–E3.7, E4.5–E4.7, E4.9–E4.10, E5.4–E5.7 |
-| **Could** | E4.8 graph view, contact photo sync, vCard QR share, TV read-only view (D-pad) |
+| **Could** | contact photo sync, vCard QR share, TV read-only view (D-pad) |
 | **Won't (v1)** | Automatic capture from call log/SMS/Gmail/Teams (E3.8), LinkedIn scraping or enrichment APIs, bulk email sending, write-back to Android contacts, multi-user sharing |
 
 ### 3.3 Out of Scope
@@ -209,19 +209,19 @@ The email addresses themselves are entered in Settings (E7.1), not written in th
 
 | Concern | Approach |
 | :-- | :-- |
-| Packaging | Subapp `rolo` (static bundle + `app.json`), imports only `@superapp/sdk` (SA-C3). |
-| Data | App-owned collections `rolo_*` plus read/write of `core_people`, `core_tags` (core scopes). All writes through `data.*` → outbox → `/api/sa/ops` (SA-C5). |
+| Packaging | Subapp `contacts` (static bundle + `app.json`), imports only `@superapp/sdk` (SA-C3). |
+| Data | App-owned collections `contacts_*` plus read/write of `core_people`, `core_tags` (core scopes). All writes through `data.*` → outbox → `/api/sa/ops` (SA-C5). |
 | Launching | `launcher.open` bridge method (`apps.launch` scope), extended in a **minor** contract version with an `intent` target (§4.5). Native work only in `CapabilityBroker.ts` + a Kotlin plugin (SA-C2). |
 | Device contacts | `device.contacts.list` (`device.contacts.read`) for import only. |
-| Notifications | `notify.post` for digests; deep links `superapp://rolo/today`, `/contact/:id`, `/campaign/:id`. |
-| Bus | Emits `rolo.touch.logged`, `rolo.campaign.stage_changed`; listens `core.person.updated`. Other subapps (e.g. a future calendar subapp) can react. |
+| Notifications | `notify.post` for digests; deep links `superapp://contacts/today`, `/contact/:id`, `/campaign/:id`. |
+| Bus | Emits `contacts.touch.logged`, `contacts.campaign.stage_changed`; listens `core.person.updated`. Other subapps (e.g. a future calendar subapp) can react. |
 | Form factors | `phone` in v1; contracts stay device-agnostic (SA-C7) so a TV/desktop read-only view is possible later. |
 
-Draft manifest (for Jules; final in `subapps/rolo/app.json`):
+Draft manifest (for Jules; final in `subapps/contacts/app.json`):
 
 ```json
 {
-  "id": "rolo",
+  "id": "contacts",
   "name": "Rolodex",
   "version": "0.1.0",
   "sdk": ">=1.1 <2.0",
@@ -231,10 +231,10 @@ Draft manifest (for Jules; final in `subapps/rolo/app.json`):
     "required": ["data.own", "core.people.read", "core.people.write", "core.tags.read", "apps.launch"],
     "optional": ["device.contacts.read", "notify.post", "files.read", "nav.open"]
   },
-  "collections": ["rolo_profiles", "rolo_contexts", "rolo_memberships", "rolo_identities", "rolo_orgs", "rolo_affiliations",
-                  "rolo_relationships", "rolo_interactions", "rolo_campaigns", "rolo_campaign_targets",
-                  "rolo_templates", "rolo_filters", "rolo_lists", "rolo_org_links", "rolo_imports"],
-  "events": { "emits": ["rolo.touch.logged", "rolo.campaign.stage_changed"], "listens": ["core.person.updated"] },
+  "collections": ["contacts_profiles", "contacts_contexts", "contacts_memberships", "contacts_identities", "contacts_orgs", "contacts_affiliations",
+                  "contacts_relationships", "contacts_interactions", "contacts_campaigns", "contacts_campaign_targets",
+                  "contacts_templates", "contacts_filters", "contacts_lists", "contacts_org_links", "contacts_imports"],
+  "events": { "emits": ["contacts.touch.logged", "contacts.campaign.stage_changed"], "listens": ["core.person.updated"] },
   "deepLinks": ["/today", "/contact/:id", "/org/:id", "/campaign/:id"],
   "intents": [{ "action": "share.receive", "types": ["text/plain", "text/x-vcard"] }],
   "car": null,
@@ -246,7 +246,7 @@ Draft manifest (for Jules; final in `subapps/rolo/app.json`):
 
 ```text
  ┌──────────── Phone (shell) ─────────────────────────────────────────────┐
- │  rolo iframe (sandboxed)                                               │
+ │  contacts iframe (sandboxed)                                               │
  │   UI ─► Resolver (pure TS) ─► sa.launcher.open(target) ──┐             │
  │   UI ─► sa.data.* ──────────────────────────┐            │             │
  │                                              ▼            ▼             │
@@ -256,7 +256,7 @@ Draft manifest (for Jules; final in `subapps/rolo/app.json`):
  │                                              │               plugin ─► Android intent
  └──────────────────────────────────────────────┼─────────────────────────┘    (Dialer, GV, WhatsApp,
                                                 ▼ Tailscale HTTPS                Teams, Gmail/Outlook,
-                                    PocketBase (mini PC): rolo_* + core_people   LinkedIn)
+                                    PocketBase (mini PC): contacts_* + core_people   LinkedIn)
                                     server hooks: version, idempotency,
                                     (later) cadence digest job, graph queries
 ```
@@ -267,36 +267,58 @@ Draft manifest (for Jules; final in `subapps/rolo/app.json`):
 
 ### 4.3 Key Considerations
 
-1. **`core_people` vs `rolo_*`:** `core_people` stays the shared identity record (name, phones, emails, sourceIds, tags) so other subapps benefit. CRM-only data lives in `rolo_profiles` (1:1 with `core_people`) and related collections. Decision recorded as an ADR (Arthur, Sprint R0).
+1. **`core_people` vs `contacts_*`:** `core_people` stays the shared identity record (name, phones, emails, sourceIds, tags) so other subapps benefit. CRM-only data lives in `contacts_profiles` (1:1 with `core_people`) and related collections. Decision recorded as an ADR (Arthur, Sprint R0).
 2. **Normalisation:** phones stored E.164 with type (mobile/landline/voip/work) and an `smsCapable` flag; emails lower-cased with a `domain` field for org matching.
 3. **Link-target safety:** every URL/intent is built from a fixed template table, values are encoded, schemes and packages are allow-listed in contracts (§5).
 4. **From-account handling is the riskiest unknown** (§4.7): spike in Sprint R0.
 5. **Obsidian import fidelity:** the vault schema is user-defined; the importer is mapping-driven, never hard-coded.
 
-### 4.4 Data Contract (SoT will be `server/pb_migrations/<ts>_rolo.js`)
+### 4.4.0 What is built (v0.5) and how this contract maps onto it
+
+The vault migration and the network data layer were built first (Supra---Contacts, schema `server/pb_migrations/1764201600_contacts.js`, installed with this PR). The contract below keeps its logical names; this is how they map onto the built collections. Everything marked *later* is added by additive migrations in the build sprints.
+
+| Contract (logical) | Built collection(s) | Status |
+| :-- | :-- | :-- |
+| `contacts_profiles` | `contacts_people` (name parts, job title, current org, alma mater, location, preferred channel, cadence, last/next touch, met on, how met; `core_person` link) + `contacts_entities` (seniority, relationship, status, full front matter, tags, aliases, attributes) | Built; nickname, pronouns, photo, family *later* |
+| `contacts_orgs` | `contacts_organizations` (companies: domain, industry, size, HQ, relationship tier, primary contact, parent) + `contacts_nodes` (my roles, projects, events, groups) + `contacts_entities.kind` | Built |
+| `contacts_affiliations` | `contacts_edges` with `works_at` / `worked_at` / `involved_in` / `listed_under` / `alumnus_of` / `member_of`; `section` = department, `context_note` = the role note it was listed in (`via`) | Built as edges; dated affiliations *later* |
+| `contacts_relationships` | `contacts_edges` with `knows` / `reports_to` / `key_contact` / `primary_contact` | Built as edges; strength *later* |
+| `contacts_org_links` | `contacts_edges` between organisations (`related_to`, `subsidiary_of`, `listed_under`) | Built as edges |
+| `contacts_interactions` | `contacts_interactions` (date, kind, summary, source) | Built; channel, identity, outcome, membership, campaign *later* |
+| `contacts_imports` | `contacts_imports` (audit per push; `cutover` marker) | Built |
+| — | `contacts_contact_points` (normalised E.164 phones incl. extensions, emails, WhatsApp, Google Voice, LinkedIn, website; primary + valid flags) | Built (core_people mirrors them, §4.3) |
+| — | `contacts_key_dates` (birthdays, anniversaries, met-on, follow-ups) | Built |
+| — | `contacts_mentions` (unlinked names, §4.4.1) | Built |
+| — | `contacts_enrichment` (proposed facts → data-quality queue) | Built |
+| — | Views `contacts_reach_out` (due date = next touch, else latest touch + cadence), `contacts_backlinks` | Built |
+| `contacts_contexts`, `contacts_memberships`, `contacts_identities`, `contacts_campaigns`, `contacts_campaign_targets`, `contacts_templates`, `contacts_filters`, `contacts_lists` | — | *Later* (R0–R6) |
+
+Ids are deterministic 15-character ids from the note title, so the migration, the server and the phone mirror agree. `core_people` is kept in step by a server hook (`server/pb_hooks/contacts.pb.js`): one `core_people` record per `contacts_people` record (same id), with name, phones and emails, so other subapps see contacts.
+
+### 4.4 Data Contract (SoT: `server/pb_migrations/1764201600_contacts.js` plus additive migrations)
 
 All collections follow the synced-collection conventions (device-generated `id`, `version`, `deleted`, `owner`, `origin_device`, `created`, `updated`).
 
 | Collection | Purpose | Key fields |
 | :-- | :-- | :-- |
 | `core_people` (existing) | Shared identity | displayName, phones (JSON: `[{e164, type, label, smsCapable, whatsapp}]`), emails (JSON: `[{address, type, label}]`), sourceIds, tags |
-| `rolo_profiles` | CRM attributes, 1:1 with a person | person (rel `core_people`, unique), isMe (bool), firstName, lastName, nickname, pronouns, photo (rel `core_files`), birthday, anniversaries (JSON), location {city, region, country, tz}, linkedinUrl, howWeMet, knownThrough (rel org), seniority, metAt (date), introducedBy (rel person), interests (JSON), family (JSON), pets (JSON), customFields (JSON), notes (markdown), sourceNotePath (Obsidian origin) |
-| `rolo_contexts` | Organisation/role a relationship belongs to (§2.2) | name, network, org (rel `rolo_orgs`, optional), defaultIdentity (rel identity), channelOrder (JSON), quietHours (JSON), color, active |
-| `rolo_memberships` | Person ↔ network + context | person, network (`work`/`professional`/`personal`), context (rel `rolo_contexts`), primary (bool), tier (`A`/`B`/`C`/`D`/`none`), cadenceDays (override), preferredChannels (JSON ordered list), preferredIdentity (rel identity), quietHours (JSON), lastTouchAt, nextDueAt, snoozedUntil, snoozeReason, active (bool), donorStatus (Baypath), sensitivity (`normal`/`work`) |
-| `rolo_identities` | My from-accounts | label, context (rel `rolo_contexts`), network (derived), provider (`google`/`microsoft`/`other`), kind (`email`/`teams`/`phone`/`gvoice`/`sms`/`whatsapp`/`linkedin`), address, handler (`gmail`/`outlook`/`gmail_web`/`dialer`/`gvoice`/`whatsapp`/`whatsapp_business`/`teams`/`linkedin`/`default`), signature, active |
-| `rolo_orgs` | Companies, schools, non-profits, units, groups, projects, events | name, kind (`company`/`school`/`nonprofit`/`association`/`government`/`unit`/`board`/`group`/`firm`/`project`/`event`/`other`), aliases (JSON, incl. abbreviations such as BBU, USCD), domains (JSON), parent (rel org), industry, hqLocation, website, primaryContact (rel person), relationshipLevel, topics (JSON), location, linkedinUrl, notes |
-| `rolo_org_links` | Org ↔ org | from, to, kind (`parent`/`owner`/`partner`/`vendor`/`carrier`/`client`/`related`), notes |
-| `rolo_affiliations` | Person ↔ org over time | person, org, kind (`employment`/`education`/`board`/`volunteer`/`membership`/`member`/`attended`/`client`), title, department, via (rel to Nick's affiliation: "worked with me in this role"), keyPerson (bool), degree, field, classYear, start, end, current (bool), source (`manual`/`obsidian`/`linkedin_csv`/`contacts`) |
-| `rolo_relationships` | Person ↔ person | from, to, kind (`knows`/`introduced_by`/`reports_to`/`family`/`partner`/`mentor`), strength (1–5), since, notes |
-| `rolo_interactions` | Touches / timeline | person (or org, for org history), membership, network, context, channel, identity, direction (`out`/`in`), outcome, at, durationSec, note, campaign (rel), launchId (correlates with launch event) |
-| `rolo_campaigns` | Outreach drives | name, kind, context (rel), goal, metric {type, target}, networks (JSON), startAt, endAt, stages (JSON ordered), cadenceDays, sequence (JSON steps), defaultIdentity, status (`draft`/`active`/`paused`/`closed`) |
-| `rolo_campaign_targets` | Person in a campaign | campaign, person, stage, stageChangedAt, nextStepAt, amount (number, optional), outcome, notes |
-| `rolo_templates` | Message templates | name, channelKinds (JSON), network, campaign (rel, optional), subject, body (with merge fields) |
-| `rolo_filters` | Saved smart lists | name, network, query (JSON AST) |
-| `rolo_lists` | Static lists (e.g. imported LinkedIn audience lists) | name, context (rel, optional), members (rel people, multiple), source |
-| `rolo_imports` | Import runs (audit) | source (`obsidian`/`contacts`/`google_csv`/`linkedin_csv`), startedAt, stats (JSON), mapping (JSON), report (rel `core_files`), status |
+| `contacts_profiles` | CRM attributes, 1:1 with a person | person (rel `core_people`, unique), isMe (bool), firstName, lastName, nickname, pronouns, photo (rel `core_files`), birthday, anniversaries (JSON), location {city, region, country, tz}, linkedinUrl, howWeMet, knownThrough (rel org), seniority, metAt (date), introducedBy (rel person), interests (JSON), family (JSON), pets (JSON), customFields (JSON), notes (markdown), sourceNotePath (Obsidian origin) |
+| `contacts_contexts` | Organisation/role a relationship belongs to (§2.2) | name, network, org (rel `contacts_orgs`, optional), defaultIdentity (rel identity), channelOrder (JSON), quietHours (JSON), color, active |
+| `contacts_memberships` | Person ↔ network + context | person, network (`work`/`professional`/`personal`), context (rel `contacts_contexts`), primary (bool), tier (`A`/`B`/`C`/`D`/`none`), cadenceDays (override), preferredChannels (JSON ordered list), preferredIdentity (rel identity), quietHours (JSON), lastTouchAt, nextDueAt, snoozedUntil, snoozeReason, active (bool), donorStatus (Baypath), sensitivity (`normal`/`work`) |
+| `contacts_identities` | My from-accounts | label, context (rel `contacts_contexts`), network (derived), provider (`google`/`microsoft`/`other`), kind (`email`/`teams`/`phone`/`gvoice`/`sms`/`whatsapp`/`linkedin`), address, handler (`gmail`/`outlook`/`gmail_web`/`dialer`/`gvoice`/`whatsapp`/`whatsapp_business`/`teams`/`linkedin`/`default`), signature, active |
+| `contacts_orgs` | Companies, schools, non-profits, units, groups, projects, events | name, kind (`company`/`school`/`nonprofit`/`association`/`government`/`unit`/`board`/`group`/`firm`/`project`/`event`/`other`), aliases (JSON, incl. abbreviations such as BBU, USCD), domains (JSON), parent (rel org), industry, hqLocation, website, primaryContact (rel person), relationshipLevel, topics (JSON), location, linkedinUrl, notes |
+| `contacts_org_links` | Org ↔ org | from, to, kind (`parent`/`owner`/`partner`/`vendor`/`carrier`/`client`/`related`), notes |
+| `contacts_affiliations` | Person ↔ org over time | person, org, kind (`employment`/`education`/`board`/`volunteer`/`membership`/`member`/`attended`/`client`), title, department, via (rel to Nick's affiliation: "worked with me in this role"), keyPerson (bool), degree, field, classYear, start, end, current (bool), source (`manual`/`obsidian`/`linkedin_csv`/`contacts`) |
+| `contacts_relationships` | Person ↔ person | from, to, kind (`knows`/`introduced_by`/`reports_to`/`family`/`partner`/`mentor`), strength (1–5), since, notes |
+| `contacts_interactions` | Touches / timeline | person (or org, for org history), membership, network, context, channel, identity, direction (`out`/`in`), outcome, at, durationSec, note, campaign (rel), launchId (correlates with launch event) |
+| `contacts_campaigns` | Outreach drives | name, kind, context (rel), goal, metric {type, target}, networks (JSON), startAt, endAt, stages (JSON ordered), cadenceDays, sequence (JSON steps), defaultIdentity, status (`draft`/`active`/`paused`/`closed`) |
+| `contacts_campaign_targets` | Person in a campaign | campaign, person, stage, stageChangedAt, nextStepAt, amount (number, optional), outcome, notes |
+| `contacts_templates` | Message templates | name, channelKinds (JSON), network, campaign (rel, optional), subject, body (with merge fields) |
+| `contacts_filters` | Saved smart lists | name, network, query (JSON AST) |
+| `contacts_lists` | Static lists (e.g. imported LinkedIn audience lists) | name, context (rel, optional), members (rel people, multiple), source |
+| `contacts_imports` | Import runs (audit) | source (`obsidian`/`contacts`/`google_csv`/`linkedin_csv`), startedAt, stats (JSON), mapping (JSON), report (rel `core_files`), status |
 
-**Access rules:** owner only (as all collections). `rolo_identities.address` is not a secret but is personal data; no tokens are stored anywhere in `rolo_*`.
+**Access rules:** owner only (as all collections). `contacts_identities.address` is not a secret but is personal data; no tokens are stored anywhere in `contacts_*`.
 
 ### 4.4.1 The vault as it actually is (from 16 sample notes, 2026-11-23)
 
@@ -314,39 +336,39 @@ Nick shared sample notes: people, organisations, his own role notes, school and 
 
 | Vault field | What it actually means | Rolodex target |
 | :-- | :-- | :-- |
-| `network` (P2) | The *organisation or community you know them through* (e.g. a former employer) | `rolo_profiles.knownThrough` (rel org) + a **context suggestion**, not `rolo_memberships.network` |
-| `tier` (P1), `relationship_tier` (O) | Seniority / level of the relationship ("C-Suite", "CEO") | `rolo_profiles.seniority`; `rolo_orgs.relationshipLevel`. **Not** the cadence tier |
-| `affiliations` (P2) | Sub-units of an org, written "BBU - Manufacturing", "BBU - ePMO" | `rolo_affiliations.department` on the matching org (via alias table: BBU → Bimbo Bakeries USA, USCD → US Cabinet Depot) |
-| `roles` (P2), `node` (P1) | Links to Nick's role nodes or projects (e.g. a named project) the person was part of | `rolo_affiliations.via` → Nick's affiliation for that role (concurrency without dates); projects → `rolo_orgs` kind `project` |
+| `network` (P2) | The *organisation or community you know them through* (e.g. a former employer) | `contacts_profiles.knownThrough` (rel org) + a **context suggestion**, not `contacts_memberships.network` |
+| `tier` (P1), `relationship_tier` (O) | Seniority / level of the relationship ("C-Suite", "CEO") | `contacts_profiles.seniority`; `contacts_orgs.relationshipLevel`. **Not** the cadence tier |
+| `affiliations` (P2) | Sub-units of an org, written "BBU - Manufacturing", "BBU - ePMO" | `contacts_affiliations.department` on the matching org (via alias table: BBU → Bimbo Bakeries USA, USCD → US Cabinet Depot) |
+| `roles` (P2), `node` (P1) | Links to Nick's role nodes or projects (e.g. a named project) the person was part of | `contacts_affiliations.via` → Nick's affiliation for that role (concurrency without dates); projects → `contacts_orgs` kind `project` |
 | `former_organizations` | Mostly orgs, but sometimes contains a role-node title | Validate against the org list and role-node list; role titles route to `via` |
 | `organization` / `current_organization` | Current employer (text in P2, wikilink in P1) | Current `employment` affiliation |
 | `alma_mater` | Schools (list) | `education` affiliations |
-| `connections` | People they know | `rolo_relationships` (`knows`) |
-| `preferred_channel` | e.g. `linkedin`, `phone` | `rolo_memberships.preferredChannels[0]` (resolver rule 2) |
+| `connections` | People they know | `contacts_relationships` (`knows`) |
+| `preferred_channel` | e.g. `linkedin`, `phone` | `contacts_memberships.preferredChannels[0]` (resolver rule 2) |
 | `cadence_days`, `last_touch`, `next_touch`, `status` | Cadence state (e.g. 60 days) | `cadenceDays` override, `lastTouchAt`, explicit follow-up date (`nextDueAt` kept as entered), membership `active` |
 | `donor_status` | Baypath donor/sponsor status | Baypath membership `donorStatus`; seeds the Baypath Sponsors 2027 campaign stage |
-| `pet_type` / `Pet_type` ("Dog, Dog") | Pets | `rolo_profiles.pets` (list); keys matched case-insensitively |
-| `primary_contact` (O) | Main contact at the org | `rolo_orgs.primaryContact` |
-| `related_org` (O) | Parent / owner / sister company | `rolo_org_links` (`parent` by default, editable) |
-| O sections Strategic Partners / Vendors / Transportation | Org-to-org relationships | `rolo_org_links` (`partner` / `vendor` / `carrier`) |
+| `pet_type` / `Pet_type` ("Dog, Dog") | Pets | `contacts_profiles.pets` (list); keys matched case-insensitively |
+| `primary_contact` (O) | Main contact at the org | `contacts_orgs.primaryContact` |
+| `related_org` (O) | Parent / owner / sister company | `contacts_org_links` (`parent` by default, editable) |
+| O sections Strategic Partners / Vendors / Transportation | Org-to-org relationships | `contacts_org_links` (`partner` / `vendor` / `carrier`) |
 | O sections Key People / Notable Personnel | People at the org | Current `employment` affiliation + `keyPerson` flag |
 | O section Roles | Nick's role nodes at that org | Nick's own `employment` affiliations (title = role-node title without the suffix) |
 | `## Quick Dial` | Generated `tel:` link | Dropped (the launcher replaces it) |
-| `## Interaction Log`, O "Interaction & Project History" | Dated entries | `rolo_interactions` on the person or the org (flagged `imported`) |
+| `## Interaction Log`, O "Interaction & Project History" | Dated entries | `contacts_interactions` on the person or the org (flagged `imported`) |
 | Dataview code blocks | Queries | Dropped; equivalent native views exist (E4.3) |
 
-**Role node (R) parsing:** each R note becomes one `employment` affiliation for Nick (`isMe`). Every person listed in it gets an affiliation with the same org, `department` = nearest heading, and `via` = that affiliation, so the app knows they **worked with Nick during that role** even though the vault has no dates. "Report To" becomes `reports_to` (Nick → that person); Direct Reports become `reports_to` (them → Nick). Sub-org headings that are wikilinks (a carrier, a vendor) create an org, an `org_link` (`vendor`/`carrier`) and affiliations for the people under them. Events listed become `rolo_orgs` kind `event` with `attended` affiliations. The importer asks once for each role's start/end years so overlap detection (E4.4) gets real dates.
+**Role node (R) parsing:** each R note becomes one `employment` affiliation for Nick (`isMe`). Every person listed in it gets an affiliation with the same org, `department` = nearest heading, and `via` = that affiliation, so the app knows they **worked with Nick during that role** even though the vault has no dates. "Report To" becomes `reports_to` (Nick → that person); Direct Reports become `reports_to` (them → Nick). Sub-org headings that are wikilinks (a carrier, a vendor) create an org, an `org_link` (`vendor`/`carrier`) and affiliations for the people under them. Events listed become `contacts_orgs` kind `event` with `attended` affiliations. The importer asks once for each role's start/end years so overlap detection (E4.4) gets real dates.
 
-**Hub note (H) parsing:** the note title, or each heading that is a wikilink, becomes a group (`rolo_orgs` kind `school` / `board` / `group` / `firm` / `unit`, chosen in the mapping UI, with `parent` for nesting such as council › troop). Each bullet is a membership: `education` for school lists, `board` for boards, `member` for groups, and the heading text (Partners, Consultants) becomes the title. Nested bullets (firm › person) give the person an affiliation with the firm. Audience lists in "LinkedIn Network" (e.g. Baypath content, Recruiters) become **static lists** (`rolo_lists`) that can seed campaigns or contexts: Recruiters → Job search context; Baypath content → Baypath context candidates.
+**Hub note (H) parsing:** the note title, or each heading that is a wikilink, becomes a group (`contacts_orgs` kind `school` / `board` / `group` / `firm` / `unit`, chosen in the mapping UI, with `parent` for nesting such as council › troop). Each bullet is a membership: `education` for school lists, `board` for boards, `member` for groups, and the heading text (Partners, Consultants) becomes the title. Nested bullets (firm › person) give the person an affiliation with the firm. Audience lists in "LinkedIn Network" (e.g. Baypath content, Recruiters) become **static lists** (`contacts_lists`) that can seed campaigns or contexts: Recruiters → Job search context; Baypath content → Baypath context candidates.
 
 **Names and links:**
 
-- Wikilinks may point at notes that don't exist yet (people only named in a list) or be empty (`"[[]]"`). Missing targets become **stub contacts** flagged "needs details"; empty links are ignored.
-- Plain-text names in lists (no wikilink) become stubs too, after a fuzzy match against existing names.
+- Wikilinks may point at notes that don't exist yet or be empty (`"[[]]"`). Missing targets become **stub records** ("no note yet") whose kind is inferred from how they are linked; empty links are ignored and reported.
+- Plain-text names in lists (no wikilink) are **deliberate**: people involved but not worth a note or contact details (Nick, 2026-11-27). They are kept as lightweight mentions (`contacts_mentions`) attached to what they're listed under; they are not stubs and not data-quality items. A name that matches an existing record attaches to it.
 - Disambiguation suffixes in note titles ("Name (BBU)", "Name AOP") are stripped from `displayName`, kept as an alias so links resolve, and used as a hint for the org.
 - The same person often appears in several hub notes (e.g. a LinkedIn list and a school cohort). That is the point: each appearance becomes another affiliation, which feeds shared-background and overlap views.
 
-**Data-quality queue (post-import):** stubs without any phone/email/LinkedIn, role titles found in `former_organizations`, duplicate candidates, people with a cadence but no context, and notes the parser could not classify. The import is not "done" (K6) until the queue is cleared or each item is explicitly deferred.
+**Data-quality queue (post-import):** linked stubs without any phone/email/LinkedIn, notes flagged by the importer (`duplicate_section`, `unrendered_template`, `name_mismatch`, tier typos, bad phones/emails/dates, empty links, title collisions), role titles found in `former_organizations`, duplicate candidates, people with a cadence but no context, and notes the parser could not classify. The import is not "done" (K6) until the queue is cleared or each item is explicitly deferred.
 
 **Default context suggestions** (Nick confirms in the dry run): current USCD affiliation → Work › USCD; in a Recruiters list → Professional › Job search; `donor_status` set or in a Baypath list → Professional › Baypath; Milford committee → Professional › Milford; FMCG client → Professional › FMCG; scouting, family, friends → Personal; other former colleagues and alumni → Professional › General (Q8).
 
@@ -408,10 +430,10 @@ Bus/log events (no message bodies, no phone numbers or addresses in logs — red
 
 | Event | Fields |
 | :-- | :-- |
-| `rolo.launch` | launchId, channel, handler, networkOfMembership, networkOfIdentity, guardOverride (bool), resolverRank, ms, opened |
-| `rolo.touch.logged` | launchId?, channel, outcome, campaign?, latencyFromLaunchSec |
-| `rolo.cadence.digest` | dueCount, overdueCount, lens |
-| `rolo.import.completed` | source, counts, conflicts, skipped |
+| `contacts.launch` | launchId, channel, handler, networkOfMembership, networkOfIdentity, guardOverride (bool), resolverRank, ms, opened |
+| `contacts.touch.logged` | launchId?, channel, outcome, campaign?, latencyFromLaunchSec |
+| `contacts.cadence.digest` | dueCount, overdueCount, lens |
+| `contacts.import.completed` | source, counts, conflicts, skipped |
 
 These feed K1–K6 in a small in-app Insights screen (Should) and Diagnostics.
 
@@ -428,21 +450,21 @@ These feed K1–K6 in a small in-app Insights screen (Should) and Diagnostics.
 | Message templates & notes | Stored XSS in the subapp | No `innerHTML`; sanitized Markdown; CSP already `connect-src 'none'` |
 | New `<queries>` packages | Package visibility expansion | Only the handlers in §4.7; Step 0 allow-list |
 | Cross-context sends | Reputational/data-leak harm (USCD, FMCG, Baypath or Milford matters sent from the wrong account) | Cross-context guard, logging, Russ adversarial tests (K3) |
-| Bulk data on phone | Lost phone exposes whole network | Already covered: SQLCipher mirror, Keystore key, biometric unlock (M4) recommended on for `rolo` |
+| Bulk data on phone | Lost phone exposes whole network | Already covered: SQLCipher mirror, Keystore key, biometric unlock (M4) recommended on for `contacts` |
 
 ### 5.2 Data inventory delta (Priya)
 
 | Data | Purpose | Where | Retention | Protection / note |
 | :-- | :-- | :-- | :-- | :-- |
-| Third-party personal data (names, numbers, emails, birthdays, family, employment/education history, notes) | Relationship management | PocketBase `rolo_*`, `core_people`; phone mirror | Until deleted by owner; soft delete 30 days | Owner-only; encrypted mirror; encrypted backups. Household/personal use, but **Work** contacts may fall under employer data policy |
+| Third-party personal data (names, numbers, emails, birthdays, family, employment/education history, notes) | Relationship management | PocketBase `contacts_*`, `core_people`; phone mirror | Until deleted by owner; soft delete purged after 14 days (ADR-005) | Owner-only; encrypted mirror; encrypted backups. Household/personal use, but **Work** contacts may fall under employer data policy |
 | Work and organisation-context records (USCD, FMCG, Baypath, Milford, Job search) | Relationships per context | Same | Same | **Nick confirmed (2026-11-23) storing these on the mini PC is allowed.** Priya still reviews organisation-specific obligations (e.g. Milford committee or Baypath donor confidentiality) in D18 and whether any context needs restricted fields |
 | Interaction log (who, when, channel, outcome, short note) | Cadence | Same | Configurable auto-prune (default keep) | No message content captured |
 | Imported Obsidian vault copy (phone folder snapshot and/or Drive zip) | Import audit | `core_files` | Deleted after successful import + 30 days | Owner-only |
-| Identities (my addresses/numbers) | Routing | `rolo_identities` | Until removed | Not secrets; no OAuth tokens on phone |
+| Identities (my addresses/numbers) | Routing | `contacts_identities` | Until removed | Not secrets; no OAuth tokens on phone |
 
 ### 5.3 Applicable HB-IDs
 
-HB-SEC-03 (threat model update T-20+), HB-SEC-04 (no HTML sinks in notes/templates), HB-DATA-01 (inventory delta above), HB-DATA-02 (encryption at rest, inherited), HB-DATA-03 (no addresses/numbers/bodies in logs), HB-QUAL-01…05, HB-A11Y-01 (axe on every rolo screen), HB-A11Y-02 (focus order, D-pad-ready), HB-SUP-* (any new parsing dependency: Markdown, CSV, libphonenumber — licence + audit).
+HB-SEC-03 (threat model update T-20+), HB-SEC-04 (no HTML sinks in notes/templates), HB-DATA-01 (inventory delta above), HB-DATA-02 (encryption at rest, inherited), HB-DATA-03 (no addresses/numbers/bodies in logs), HB-QUAL-01…05, HB-A11Y-01 (axe on every contacts screen), HB-A11Y-02 (focus order, D-pad-ready), HB-SUP-* (any new parsing dependency: Markdown, CSV, libphonenumber — licence + audit).
 
 ### 5.4 Threat model link
 
@@ -556,16 +578,16 @@ Toasts for saves/launch failures (SA-U2); sync state from shell header (SA-U3); 
 ### 9.1 Rollout & rollback
 
 - Subapp released through the App manager channel (`subapps` collection); previous bundle kept for rollback (M5). Until M5 lands, sideload via the packer and `tools/deploy-server.ps1`.
-- Migrations are additive; `rolo_*` collections can be ignored by an older bundle. Rollback = previous bundle; data stays.
+- Migrations are additive; `contacts_*` collections can be ignored by an older bundle. Rollback = previous bundle; data stays.
 - **Obsidian cutover (phone vault → central PocketBase/SQLite database):** (1) dry run on the phone copy, (2) import, (3) 2-week parallel run where Obsidian is read-only, (4) Markdown export snapshot archived to the vault as `_rolo-export-YYYY-MM-DD/`, (5) Obsidian retired as CRM SoT (ADR).
 
 ### 9.2 Observability & SLOs
 
-Launch success rate ≥ 99 % (opened ≠ none when handler installed); import job success; digest delivered daily; error attribution to `rolo` in Diagnostics.
+Launch success rate ≥ 99 % (opened ≠ none when handler installed); import job success; digest delivered daily; error attribution to `contacts` in Diagnostics.
 
 ### 9.3 Support & documentation
 
-User guide (Arthur): networks and lens, identities setup, cadence tiers, campaigns, import/export. Runbook delta (Theo): migration order, backup coverage for `rolo_*`, import file cleanup.
+User guide (Arthur): networks and lens, identities setup, cadence tiers, campaigns, import/export. Runbook delta (Theo): migration order, backup coverage for `contacts_*`, import file cleanup.
 
 ---
 
@@ -594,7 +616,7 @@ Sprints are two weeks, named **R0–R6** ("Rolodex") to avoid colliding with the
 | Sprint | Theme | Exit criterion (demo) | Platform dependency |
 | :-- | :-- | :-- | :-- |
 | **R0** | Discovery, design, threat model, spikes | PRD approved; D03 + D04 accepted; spike ADRs S1–S4 decided; Obsidian dry-run on a vault copy produces a report | None (paper + throwaway spike branch) |
-| **R1** | Data foundation & import | `rolo_*` migrations + `core_people` typed shapes; contacts list/card/edit; network memberships + lens; Obsidian and phone-contacts import with dry run; Markdown export round-trip | M3 merged; M4 `device.contacts` |
+| **R1** | Data foundation & import | `contacts_*` migrations + `core_people` typed shapes; contacts list/card/edit; network memberships + lens; Obsidian and phone-contacts import with dry run; Markdown export round-trip | M3 merged; M4 `device.contacts` |
 | **R2** | Launcher & identities | Contract 1.1 `ChannelTarget`; Kotlin launch plugin; resolver v1; all 9 channels open on the phone; cross-context guard; quick-log sheet | M4 `launcher.open`, `<queries>` |
 | **R3** | Cadence & Today | Tiers, health, Today queue, snooze, digest notification, pinned people tiles, templates (non-campaign) | M5 notifications/deep links (digest only) |
 | **R4** | Network navigation | Orgs/affiliations UI, Who-I-know, shared-background panel, overlap finder, relationships, warm-intro paths, scale benchmark | — |
@@ -614,7 +636,7 @@ Doc IDs from `core/governance/doc-registry.md`. "—" means no deliverable that 
 | **Mara** | D04 delta: T-20+ for channel-target injection, import parsing, template XSS, cross-context leak, lost device; each High → control + test | Committed to `THREAT_MODEL.md`; Russ maps tests |
 | **Priya** | D18: third-party data handling; confidentiality obligations per context (Milford Finance Committee, Baypath donors, FMCG clients); LinkedIn ToS (no scraping, CSV export OK); data inventory delta sign-off. Storing contacts on the mini PC is already approved by Nick | D18 PASS / conditions |
 | **Jules** | Spikes on the phone (throwaway branch): S1 GV targeted intents; S2 WhatsApp vs Business; S3 Teams call link; **S4 from-account for each of the six email identities**; **S5 opening the vault folder on the phone and a zip from Google Drive**; Obsidian dry-run parser prototype run on copies of both vault locations | Spike notes with screen recordings / logcat in PR evidence; per-identity result table |
-| **Arthur** | D16 ADR-005 "Contacts data model: `core_people` + `rolo_*`"; ADR-006 "Identity routing per channel" (from spike results); ADR-007 "Retire Obsidian as CRM source of truth" (proposed) | Nick accepts |
+| **Arthur** | D16 ADR-005 "Contacts data model: `core_people` + `contacts_*`"; ADR-006 "Identity routing per channel" (from spike results); ADR-007 "Retire Obsidian as CRM source of truth" (proposed) | Nick accepts |
 | **Bob** | D17 memo: client-side graph vs server route; data volume assumptions (NFR-1) | Filed |
 | **Eleanor** | D17 memo: usability of launcher-first flow; K5 risk; lens mental model | Filed |
 | **Janus** | Work item `SA-2026-007` with `state:1_PRD` → `2_DESIGN` → `2.5_THREAT_MODEL`; enforces that no build starts before D03/D04 accepted | Labels + log |
@@ -625,8 +647,8 @@ Doc IDs from `core/governance/doc-registry.md`. "—" means no deliverable that 
 | Agent | Deliverable | Verified by |
 | :-- | :-- | :-- |
 | **Qz** | D01 R1; acceptance criteria refined for E1, E6, E7.1 | Pre-flight with Jules |
-| **Jules** | Migrations `rolo_*` + `core_people` typed phones/emails; `subapps/rolo` scaffold + manifest; list/search/card/edit; memberships + lens; identities settings; Obsidian importer (mapping, dry run, report); phone contacts import; Markdown/CSV export; D06 PR + Evidence Bundle | Required checks green; PocketBase integration covers new collections |
-| **Kumi Wai** | CI: rolo unit/E2E jobs, SDK size budget unaffected, Step 0 aware of new collections; D07 | ARTIFACT VERIFIED |
+| **Jules** | Migrations `contacts_*` + `core_people` typed phones/emails; `subapps/contacts` scaffold + manifest; list/search/card/edit; memberships + lens; identities settings; Obsidian importer (mapping, dry run, report); phone contacts import; Markdown/CSV export; D06 PR + Evidence Bundle | Required checks green; PocketBase integration covers new collections |
+| **Kumi Wai** | CI: contacts unit/E2E jobs, SDK size budget unaffected, Step 0 aware of new collections; D07 | ARTIFACT VERIFIED |
 | **Russ** | D10: import fidelity (K6) on a synthetic 500-note vault that reproduces all five note shapes of §4.4.1 (P1, P2, O, R, H), dangling and empty wikilinks, suffix-disambiguated names, mixed-case keys and role titles in `former_organizations` — no real vault data in the repo; offline create/edit; search perf (NFR-2); export round-trip | D10 PASS |
 | **Jane** | D08: architecture rules (subapp imports only SDK, no HTML sinks, migrations follow conventions) | D08 PASS |
 | **Priya** | Import/consent copy review | Comment on PR |
@@ -638,7 +660,7 @@ Doc IDs from `core/governance/doc-registry.md`. "—" means no deliverable that 
 | Agent | Deliverable | Verified by |
 | :-- | :-- | :-- |
 | **Qz** | D01 R2; resolver rule weights signed off | — |
-| **Jules** | `packages/contracts` API 1.1 `ChannelTarget` + schemas → SDK → shell handler → Kotlin launch plugin in `CapabilityBroker`; `<queries>` entries + Step 0 allow-list; resolver v1 with explanations; channel buttons, guard sheet, "Not installed" fallbacks, quick-log sheet, `rolo.launch` instrumentation | Contract tests; on-phone recording of each channel |
+| **Jules** | `packages/contracts` API 1.1 `ChannelTarget` + schemas → SDK → shell handler → Kotlin launch plugin in `CapabilityBroker`; `<queries>` entries + Step 0 allow-list; resolver v1 with explanations; channel buttons, guard sheet, "Not installed" fallbacks, quick-log sheet, `contacts.launch` instrumentation | Contract tests; on-phone recording of each channel |
 | **Mara** | Fuzz/injection test set for channel targets; review of plugin intent construction | All Highs have passing tests |
 | **Russ** | D10: matrix of 9 channels × installed/missing × network guard; K2 timing on phone; K3 adversarial (0 wrong-identity) | D10 PASS with timing evidence |
 | **Jane** | D08: contract-first order respected; native code only in broker/plugin; no permission added | D08 PASS |
@@ -650,7 +672,7 @@ Doc IDs from `core/governance/doc-registry.md`. "—" means no deliverable that 
 | Agent | Deliverable | Verified by |
 | :-- | :-- | :-- |
 | **Qz** | D01 R3; default tiers & priority score formula | — |
-| **Jules** | Cadence engine (pure), health indicator, Today view, snooze, manual touch logging, templates + merge fields, pinned-people launcher tiles (`superapp://rolo/contact/:id?action=primary`), daily digest via `notify.post` | Unit tests on cadence math incl. DST/time zones |
+| **Jules** | Cadence engine (pure), health indicator, Today view, snooze, manual touch logging, templates + merge fields, pinned-people launcher tiles (`superapp://contacts/contact/:id?action=primary`), daily digest via `notify.post` | Unit tests on cadence math incl. DST/time zones |
 | **Russ** | D10: cadence boundary tests, digest timing, lens-respecting digest, K1 tap counts | PASS |
 | **Eleanor** | Hallway test of Today flow on the phone (1 week of real use) → D17 notes | Filed |
 | **Jane / Kumi Wai** | D08 / D07 | PASS / Verified |
@@ -671,7 +693,7 @@ Doc IDs from `core/governance/doc-registry.md`. "—" means no deliverable that 
 | Agent | Deliverable | Verified by |
 | :-- | :-- | :-- |
 | **Qz** | D01 R5; campaign templates (Sponsorship, Job search, Recruiting, Reconnect, Greetings, Event); **pilot: Baypath Sponsors 2027** goals and stage set | Nick approves pilot |
-| **Jules** | Campaign CRUD, target add (search, smart list, org, path results), stages with history, sequences feeding Today with campaign boost, per-campaign templates, dashboard, close-out + CSV export, `rolo.campaign.stage_changed` | E2E: create → add 20 targets → advance stages → dashboard numbers match |
+| **Jules** | Campaign CRUD, target add (search, smart list, org, path results), stages with history, sequences feeding Today with campaign boost, per-campaign templates, dashboard, close-out + CSV export, `contacts.campaign.stage_changed` | E2E: create → add 20 targets → advance stages → dashboard numbers match |
 | **Russ** | D10: pipeline integrity under offline edits/conflicts; sequence scheduling | PASS |
 | **Priya** | Review fundraising/sponsorship use (consent to contact, no bulk send, CAN-SPAM not triggered since sends are manual 1:1) | D18 note |
 | **Eleanor** | Pilot feedback after 2 weeks of the Baypath campaign | D17 note |
@@ -683,7 +705,7 @@ Doc IDs from `core/governance/doc-registry.md`. "—" means no deliverable that 
 | :-- | :-- | :-- |
 | **MRB (Fortify Team)** | D11 CVH for SA-2026-007: all HB-IDs §5.3, threat tests green, no open High/Critical | CVH PASS |
 | **Qz** | CVH commercial section (cost: zero marginal infra; time saved vs Obsidian); K1–K6 baseline | Filed |
-| **Theo** | D12 Release Record (tag, signed APK if shell changed, subapp bundle hash); D19 runbook delta (migrations, backup includes `rolo_*`, import cleanup job); rollback rehearsal | Tested rollback evidence |
+| **Theo** | D12 Release Record (tag, signed APK if shell changed, subapp bundle hash); D19 runbook delta (migrations, backup includes `contacts_*`, import cleanup job); rollback rehearsal | Tested rollback evidence |
 | **Jules** | Insights screen; fixes from CVH; cutover tooling (final import, export snapshot) | PR evidence |
 | **Arthur** | User guide final; ADR-007 accepted; D13 final sprint review | Nick sign-off |
 | **Janus** | D13 draft; state `6.5` → `7` → `8` → `9` | Labels/log |
@@ -723,7 +745,7 @@ PRD section for the sprint's epics final; D03 screens for those epics accepted; 
 
 | # | Question | Default if unanswered |
 | :-- | :-- | :-- |
-| Q1 | ~~App name~~ **Answered: "Rolodex" (`rolo`).** | — |
+| Q1 | ~~App name~~ **Answered: "Rolodex" (`contacts`).** | — |
 | Q2 | ~~Which email accounts map to which network?~~ **Answered 2026-11-23:** Personal Gmail = personal; USCD = work; FMCG = consulting; Outlook = job search; Baypath; Milford = Finance Committee. **Answered 2026-11-23:** Milford is Outlook; the other organisation accounts are Google; Google Voice is the business line; phone is personal; WhatsApp is for international contacts. USCD uses Teams; the job-search account is Outlook (both confirmed). | — |
 | Q3 | ~~Where is the vault?~~ **Answered:** on the phone and in Google Drive. **Phone copy is canonical** and migrates into the central database. **Still open:** which front-matter keys/folders are in use (a sample note would settle this)? | Mapping UI handles key discovery |
 | Q4 | ~~May Work contacts be stored on the mini PC?~~ **Answered: yes.** | — |
@@ -758,7 +780,8 @@ See §11.5.
 
 | Version | Date | Change |
 | :-- | :-- | :-- |
-| 0.4 | 2026-11-23 | USCD uses Teams, job search is Outlook (confirmed). Real vault analysed from 16 sample notes: new §4.4.1 (five note shapes, field-meaning corrections, role-node and hub-note parsing, stubs, data-quality queue, context suggestions) replaces the guessed mapping; data contract gains `rolo_org_links`, `rolo_lists`, affiliation `via`, org kinds for units/groups/projects/events; E4.9 role view, E4.10 org links; General professional context; Q8–Q10. |
+| 0.5 | 2026-11-27 | Nick: subapp id is `contacts` (was `rolo`); the vault is migrated once and retired (dry runs → repeatable push → cutover), Supra is the source of truth; unlinked names are deliberate lightweight mentions, not stubs; graph view is a Must (built); soft deletes purged after 14 days with a restore op (ADR-005). New §4.4.0 maps this contract onto the built `contacts_*` collections. |
+| 0.4 | 2026-11-23 | USCD uses Teams, job search is Outlook (confirmed). Real vault analysed from 16 sample notes: new §4.4.1 (five note shapes, field-meaning corrections, role-node and hub-note parsing, stubs, data-quality queue, context suggestions) replaces the guessed mapping; data contract gains `contacts_org_links`, `contacts_lists`, affiliation `via`, org kinds for units/groups/projects/events; E4.9 role view, E4.10 org links; General professional context; Q8–Q10. |
 | 0.3 | 2026-11-23 | Nick's answers: email providers (Milford + Job search Microsoft, rest Google); channel conventions (GV business, mobile personal, WhatsApp international) in §2.2 and resolver; vault phone copy canonical, migrated into the central PocketBase/SQLite database via batched ops; GV risk raised; Q1, Q5, Q6 closed. |
-| 0.2 | 2026-11-23 | Nick's answers: six email identities → per-organisation **contexts** inside networks (`rolo_contexts`), cross-context guard, from-account risk and fallback ladder expanded; vault on phone + Google Drive (dual-copy import, spike S5); mini-PC storage of all contacts approved; Q2–Q4 updated. |
-| 0.1 | 2026-11-22 | First draft: pivot from Obsidian/Markdown CRM to the `rolo` subapp; epics E1–E7; data contract; channel/identity matrix; sprints R0–R6 with agent deliverables. |
+| 0.2 | 2026-11-23 | Nick's answers: six email identities → per-organisation **contexts** inside networks (`contacts_contexts`), cross-context guard, from-account risk and fallback ladder expanded; vault on phone + Google Drive (dual-copy import, spike S5); mini-PC storage of all contacts approved; Q2–Q4 updated. |
+| 0.1 | 2026-11-22 | First draft: pivot from Obsidian/Markdown CRM to the `contacts` subapp; epics E1–E7; data contract; channel/identity matrix; sprints R0–R6 with agent deliverables. |
