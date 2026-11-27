@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Contacts R0 Launch Spikes</title>
+<!--
+  Sprint R0 spikes S1–S5 (SA-2026-007 §4.7). Throwaway: open this file in Chrome on the phone, tap each
+  test, record what happened, then "Copy results" and paste them back. Addresses and numbers you type
+  stay in this browser (localStorage); the results text contains outcomes and identity labels only.
+  Fidelity note: Chrome turns intent: URLs into the same Android intents the Kotlin launch plugin (R2)
+  will send (action, data, package, extras), so a result here predicts the plugin's behaviour, except
+  that Chrome may show its own "open with" chooser.
+-->
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --fg: #17191d; --muted: #5b616b; --line: #d9dde3;
+    --accent: #1f5fd1; --ok: #127a3d; --warn: #9a5b00; --bad: #b3261e; --chip: #eef1f5;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #101215; --card: #191c21; --fg: #e8eaee; --muted: #9aa1ab; --line: #2c3139;
+            --accent: #7aa7ff; --ok: #5cc98a; --warn: #f0b35a; --bad: #ff8a80; --chip: #22262d; color-scheme: dark; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+         padding: max(12px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 48px max(16px, env(safe-area-inset-left)); }
+  main { max-width: 720px; margin: 0 auto; display: grid; gap: 14px; }
+  h1 { font-size: 20px; margin: 4px 0 0; }
+  h2 { font-size: 16px; margin: 0; }
+  p, li { color: var(--muted); }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: grid; gap: 10px; }
+  label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+  input, textarea { font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; width: 100%; }
+  textarea { font-family: var(--mono); font-size: 12px; min-height: 140px; }
+  .grid2 { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+  .test { border-top: 1px solid var(--line); padding-top: 10px; display: grid; gap: 8px; }
+  .test:first-of-type { border-top: 0; padding-top: 0; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .id { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .q { font-weight: 600; }
+  a.go { display: inline-block; text-decoration: none; background: var(--accent); color: var(--card); padding: 8px 12px; border-radius: 8px; font-weight: 600; }
+  a.go[aria-disabled="true"] { opacity: .45; pointer-events: none; }
+  .url { font-family: var(--mono); font-size: 11px; color: var(--muted); overflow-wrap: anywhere; }
+  .out button { font: inherit; font-size: 13px; border: 1px solid var(--line); background: var(--chip); color: var(--fg); border-radius: 999px; padding: 5px 10px; }
+  .out button[aria-pressed="true"][data-v="ok"] { background: var(--ok); color: var(--card); border-color: var(--ok); }
+  .out button[aria-pressed="true"][data-v="wrong"], .out button[aria-pressed="true"][data-v="web"] { background: var(--warn); color: var(--card); border-color: var(--warn); }
+  .out button[aria-pressed="true"][data-v="none"], .out button[aria-pressed="true"][data-v="missing"] { background: var(--bad); color: var(--card); border-color: var(--bad); }
+  button.primary { font: inherit; font-weight: 600; background: var(--accent); color: var(--card); border: 0; border-radius: 8px; padding: 10px 14px; }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .note input { padding: 6px 8px; font-size: 13px; }
+  .done { color: var(--ok); font-size: 13px; }
+</style>
+</head>
+<body>
+<main>
+  <div>
+    <h1>Contacts R0 launch spikes</h1>
+    <p>For each test: tap <b>Open</b>, see what the phone does, come back, and mark the outcome. When you're done, tap <b>Copy results</b> and paste them into the chat. Use your own numbers and addresses as recipients so nothing reaches anyone else, and don't press Send/Call in the other app.</p>
+  </div>
+
+  <section aria-labelledby="setup-h">
+    <h2 id="setup-h">Setup (stays on this phone)</h2>
+    <div class="grid2">
+      <label>Test number to call/text, E.164 (e.g. a second number of yours)<input id="num" inputmode="tel" placeholder="+15550100000" autocomplete="off"></label>
+      <label>International test number for WhatsApp (optional)<input id="intl" inputmode="tel" placeholder="+447700900000" autocomplete="off"></label>
+      <label>Email recipient for compose tests (your own address)<input id="to" type="email" placeholder="you@example.com" autocomplete="off"></label>
+      <label>Teams user (UPN) to chat/call, e.g. your own USCD address<input id="upn" type="email" placeholder="you@uscd.example" autocomplete="off"></label>
+    </div>
+    <p class="q">Your from-accounts (only used to build the account-specific compose links)</p>
+    <div class="grid2" id="identities"></div>
+  </section>
+
+  <div id="tests"></div>
+
+  <section aria-labelledby="res-h">
+    <h2 id="res-h">Results</h2>
+    <p>Outcomes and identity labels only: no numbers or addresses.</p>
+    <div class="row"><button class="primary" id="copy" type="button">Copy results</button><span id="copied" class="done" role="status"></span></div>
+    <label>Results text<textarea id="results" readonly></textarea></label>
+  </section>
+</main>
+
+<script>
+(() => {
+  "use strict";
+  const IDS = [
+    { key: "personal", label: "Personal Gmail", provider: "google" },
+    { key: "uscd", label: "USCD", provider: "google" },
+    { key: "fmcg", label: "FMCG", provider: "google" },
+    { key: "baypath", label: "Baypath", provider: "google" },
+    { key: "milford", label: "Milford (Outlook)", provider: "microsoft" },
+    { key: "jobsearch", label: "Job search (Outlook)", provider: "microsoft" },
+  ];
+  const GV = "com.google.android.apps.googlevoice", GMAIL = "com.google.android.gm", OUTLOOK = "com.microsoft.office.outlook";
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem("r0:" + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+    set(k, v) { try { localStorage.setItem("r0:" + k, JSON.stringify(v)); } catch { /* private mode */ } },
+  };
+  const val = (id) => (document.getElementById(id).value || "").trim();
+  const digits = (n) => n.replace(/[^\d]/g, "");
+  const enc = encodeURIComponent;
+  const SUBJ = "R0 spike test", BODY = "Test message from the Contacts R0 spike. Please ignore.";
+  // intent: URL → Android Intent (action, data from scheme, package, string extras), sent by Chrome.
+  const intent = (data, scheme, action, pkg, extras = {}) =>
+    `intent:${data}#Intent;scheme=${scheme};action=${action};` + (pkg ? `package=${pkg};` : "") +
+    Object.entries(extras).map(([k, v]) => `S.${k}=${enc(v)};`).join("") + "end";
+
+  const OUT = {
+    launch: [["ok", "Right app, prefilled"], ["wrong", "Opened, but wrong app/line"], ["web", "Opened in browser"], ["missing", "App not installed"], ["none", "Nothing happened"]],
+    email: [["ok", "Right From account"], ["wrong", "Wrong From account"], ["web", "Browser, not app"], ["none", "Nothing happened"]],
+    pick: [["ok", "Picked the vault files"], ["wrong", "Only some / one folder"], ["none", "Couldn't pick"]],
+  };
+
+  // Each test: id, group, question, href() (null = needs setup), outcome set.
+  const tests = [
+    { g: "S1 Google Voice (default business line)", id: "S1.1", q: "GV call: dial targeted at the Google Voice app", out: "launch",
+      href: () => val("num") && intent(enc(val("num")), "tel", "android.intent.action.DIAL", GV) },
+    { g: "S1 Google Voice (default business line)", id: "S1.2", q: "GV text: SMS compose targeted at Google Voice, with a prefilled body", out: "launch",
+      href: () => val("num") && intent(enc(val("num")), "smsto", "android.intent.action.SENDTO", GV, { sms_body: BODY }) },
+    { g: "S1 Google Voice (default business line)", id: "S1.3", q: "Baseline: plain tel: (does GV's \"make calls\" setting take over?)", out: "launch",
+      href: () => val("num") && `tel:${val("num")}` },
+    { g: "S1 Google Voice (default business line)", id: "S1.4", q: "Baseline: plain sms: with body (personal line)", out: "launch",
+      href: () => val("num") && `sms:${val("num")}?body=${enc(BODY)}` },
+    { g: "S2 WhatsApp (international contacts)", id: "S2.1", q: "wa.me link with prefilled text", out: "launch",
+      href: () => (val("intl") || val("num")) && `https://wa.me/${digits(val("intl") || val("num"))}?text=${enc(BODY)}` },
+    { g: "S2 WhatsApp (international contacts)", id: "S2.2", q: "whatsapp:// targeted at personal WhatsApp", out: "launch",
+      href: () => (val("intl") || val("num")) && `intent://send?phone=${digits(val("intl") || val("num"))}&text=${enc(BODY)}#Intent;scheme=whatsapp;package=com.whatsapp;end` },
+    { g: "S2 WhatsApp (international contacts)", id: "S2.3", q: "Same, targeted at WhatsApp Business (expect \"not installed\" unless you use it)", out: "launch",
+      href: () => (val("intl") || val("num")) && `intent://send?phone=${digits(val("intl") || val("num"))}#Intent;scheme=whatsapp;package=com.whatsapp.w4b;end` },
+    { g: "S3 Teams (USCD)", id: "S3.1", q: "Teams chat deep link with a prefilled message", out: "launch",
+      href: () => val("upn") && `https://teams.microsoft.com/l/chat/0/0?users=${enc(val("upn"))}&message=${enc(BODY)}` },
+    { g: "S3 Teams (USCD)", id: "S3.2", q: "Teams call deep link (stop before the call connects)", out: "launch",
+      href: () => val("upn") && `https://teams.microsoft.com/l/call/0/0?users=${enc(val("upn"))}` },
+    { g: "S3 Teams (USCD)", id: "S3.3", q: "msteams: scheme call link", out: "launch",
+      href: () => val("upn") && `msteams:/l/call/0/0?users=${enc(val("upn"))}` },
+  ];
+  for (const idn of IDS) {
+    const g = "S4 Email from the right account (critical)";
+    if (idn.provider === "google") {
+      tests.push({ g, id: `S4.${idn.key}.a`, ident: idn.label, q: `${idn.label}: account-addressed Gmail compose (/mail/u/<account>/)`, out: "email",
+        href: () => val("to") && val("id_" + idn.key) && `https://mail.google.com/mail/u/${enc(val("id_" + idn.key))}/?view=cm&fs=1&to=${enc(val("to"))}&su=${enc(SUBJ)}&body=${enc(BODY)}` });
+      tests.push({ g, id: `S4.${idn.key}.b`, ident: idn.label, q: `${idn.label}: mailto targeted at the Gmail app (switch Gmail to this account first, then test)`, out: "email",
+        href: () => val("to") && intent(`${val("to")}?subject=${enc(SUBJ)}&body=${enc(BODY)}`, "mailto", "android.intent.action.SENDTO", GMAIL) });
+    } else {
+      tests.push({ g, id: `S4.${idn.key}.a`, ident: idn.label, q: `${idn.label}: ms-outlook://compose (which account shows in From?)`, out: "email",
+        href: () => val("to") && `ms-outlook://compose?to=${enc(val("to"))}&subject=${enc(SUBJ)}&body=${enc(BODY)}` });
+      tests.push({ g, id: `S4.${idn.key}.b`, ident: idn.label, q: `${idn.label}: mailto targeted at the Outlook app (switch Outlook to this account first)`, out: "email",
+        href: () => val("to") && intent(`${val("to")}?subject=${enc(SUBJ)}&body=${enc(BODY)}`, "mailto", "android.intent.action.SENDTO", OUTLOOK) });
+    }
+  }
+  tests.push({ g: "S5 Vault on the phone", id: "S5.1", q: "Pick the vault's People folder notes (.md) or a zip from Drive. Can you select them all?", out: "pick", picker: true });
+
+  // ---- render
+  const idBox = document.getElementById("identities");
+  for (const idn of IDS) {
+    const l = document.createElement("label");
+    l.append(`${idn.label} address`);
+    const i = document.createElement("input");
+    i.id = "id_" + idn.key; i.type = "email"; i.autocomplete = "off"; i.placeholder = idn.provider === "google" ? "name@gmail.com" : "name@outlook.com";
+    l.append(i); idBox.append(l);
+  }
+  for (const id of ["num", "intl", "to", "upn", ...IDS.map((x) => "id_" + x.key)]) {
+    const el = document.getElementById(id);
+    el.value = store.get("in:" + id, "");
+    el.addEventListener("input", () => { store.set("in:" + id, el.value); refresh(); });
+  }
+
+  const results = store.get("results", {});
+  const box = document.getElementById("tests");
+  let current = null, links = [];
+  for (const t of tests) {
+    if (t.g !== current) {
+      current = t.g;
+      const s = document.createElement("section");
+      const h = document.createElement("h2"); h.textContent = t.g; s.append(h);
+      box.append(s);
+    }
+    const sec = box.lastElementChild;
+    const div = document.createElement("div"); div.className = "test";
+    const head = document.createElement("div"); head.className = "row";
+    const id = document.createElement("span"); id.className = "id"; id.textContent = t.id;
+    const q = document.createElement("span"); q.className = "q"; q.textContent = t.q;
+    head.append(id, q); div.append(head);
+    if (t.picker) {
+      const inp = document.createElement("input"); inp.type = "file"; inp.multiple = true; inp.accept = ".md,.zip,text/markdown,application/zip";
+      const info = document.createElement("div"); info.className = "url";
+      inp.addEventListener("change", () => {
+        const files = [...inp.files];
+        const newest = files.reduce((m, f) => Math.max(m, f.lastModified || 0), 0);
+        const md = files.filter((f) => /\.md$/i.test(f.name)).length, zip = files.filter((f) => /\.zip$/i.test(f.name)).length;
+        info.textContent = `${files.length} file(s): ${md} .md, ${zip} .zip · newest modified ${newest ? new Date(newest).toISOString().slice(0, 16).replace("T", " ") : "n/a"}`;
+        results[t.id] = { ...(results[t.id] || {}), detail: `${files.length} files (${md} md, ${zip} zip), newest ${newest ? new Date(newest).toISOString().slice(0, 10) : "n/a"}` };
+        store.set("results", results); renderResults();
+      });
+      div.append(inp, info);
+    } else {
+      const row = document.createElement("div"); row.className = "row";
+      const a = document.createElement("a"); a.className = "go"; a.textContent = "Open"; a.rel = "noopener";
+      const u = document.createElement("div"); u.className = "url";
+      row.append(a); div.append(row, u);
+      links.push({ t, a, u });
+    }
+    const out = document.createElement("div"); out.className = "row out"; out.setAttribute("role", "group"); out.setAttribute("aria-label", `${t.id} outcome`);
+    for (const [v, label] of OUT[t.out]) {
+      const b = document.createElement("button"); b.type = "button"; b.dataset.v = v; b.textContent = label;
+      b.setAttribute("aria-pressed", String(results[t.id]?.v === v));
+      b.addEventListener("click", () => {
+        results[t.id] = { ...(results[t.id] || {}), v };
+        for (const x of out.children) x.setAttribute("aria-pressed", String(x === b));
+        store.set("results", results); renderResults();
+      });
+      out.append(b);
+    }
+    const note = document.createElement("label"); note.className = "note";
+    const ni = document.createElement("input"); ni.placeholder = "Note (e.g. which account appeared, any chooser shown)";
+    ni.value = results[t.id]?.note || "";
+    ni.addEventListener("input", () => { results[t.id] = { ...(results[t.id] || {}), note: ni.value }; store.set("results", results); renderResults(); });
+    note.append(ni);
+    div.append(out, note);
+    sec.append(div);
+  }
+
+  function refresh() {
+    for (const { t, a, u } of links) {
+      const h = t.href();
+      if (h) { a.href = h; a.removeAttribute("aria-disabled"); u.textContent = redact(h); }
+      else { a.removeAttribute("href"); a.setAttribute("aria-disabled", "true"); u.textContent = "Fill in the setup fields first."; }
+    }
+  }
+  // show the link shape without the private values
+  function redact(h) {
+    let s = h;
+    for (const id of ["num", "intl", "to", "upn", ...IDS.map((x) => "id_" + x.key)]) {
+      const v = val(id); if (!v) continue;
+      for (const form of [v, enc(v), digits(v)]) if (form && form.length > 3) s = s.split(form).join(`‹${id.replace("id_", "")}›`);
+    }
+    return s;
+  }
+  function renderResults() {
+    const lines = ["| Test | Outcome | Note |", "| :-- | :-- | :-- |"];
+    for (const t of tests) {
+      const r = results[t.id]; if (!r) continue;
+      const label = (OUT[t.out].find(([v]) => v === r.v) || [, "—"])[1];
+      const note = [r.detail, r.note].filter(Boolean).join("; ").replace(/\|/g, "/").replace(/[\w.+-]+@[\w.-]+/g, "‹address›").replace(/\+?\d[\d\s().-]{6,}\d/g, "‹number›");
+      lines.push(`| ${t.id}${t.ident ? " (" + t.ident + ")" : ""} | ${label} | ${note} |`);
+    }
+    lines.push("", `Device: ${navigator.userAgent.replace(/\(([^)]*)\)/, (m, g) => "(" + g.split(";").slice(0, 3).join(";") + ")")}`);
+    document.getElementById("results").value = lines.join("\n");
+  }
+  document.getElementById("copy").addEventListener("click", () => {
+    const ta = document.getElementById("results");
+    const done = () => (document.getElementById("copied").textContent = "Copied. Paste it into the chat.");
+    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(ta.value).then(done, () => { ta.select(); document.getElementById("copied").textContent = "Selected; use Copy."; });
+    else { ta.select(); document.getElementById("copied").textContent = "Selected; use Copy."; }
+  });
+  refresh(); renderResults();
+})();
+</script>
+</body>
+</html>
