@@ -113,6 +113,47 @@ describe('POST /api/sa/ops (version + idempotency hooks)', () => {
   });
 });
 
+describe('contacts subapp collections (SA-2026-007)', () => {
+  const op = (collection: string, recordId: string, o: string, payload?: Record<string, unknown>, baseVersion?: number) =>
+    api('/api/sa/ops', { token: user, body: { opId: opId(), collection, recordId, op: o, ...(payload ? { payload } : {}), ...(baseVersion ? { baseVersion } : {}) } });
+  const core = async (id: string) => (await api(`/api/collections/core_people/records/${id}`, { token: user })).body;
+
+  it('mirror each contact into core_people (same id), with phones and emails, through delete and restore', async () => {
+    const id = rid();
+    expect((await op('contacts_entities', id, 'create', { kind: 'person', title: 'Ava Torres', title_key: 'ava torres' })).status).toBe(200);
+    expect((await op('contacts_people', id, 'create', { entity: id, display_name: 'Ava Torres' })).status).toBe(200);
+    expect((await op('contacts_contact_points', rid(), 'create', { entity: id, channel: 'phone', value: '(555) 010-2030', value_norm: '+15550102030', is_primary: true, is_valid: true, source: 'vault:phone' })).status).toBe(200);
+    expect((await op('contacts_contact_points', rid(), 'create', { entity: id, channel: 'email', value: 'ava@example.com', value_norm: 'ava@example.com', is_primary: true, is_valid: true, source: 'vault:email' })).status).toBe(200);
+
+    let c = await core(id);
+    expect(c).toMatchObject({ id, displayName: 'Ava Torres', owner: userId, deleted: false, sourceIds: { contacts: id } });
+    expect(c.phones).toEqual([{ e164: '+15550102030', type: 'phone', label: null, primary: true }]);
+    expect(c.emails).toEqual([{ address: 'ava@example.com', label: null, primary: true }]);
+    const person = (await api(`/api/collections/contacts_people/records/${id}`, { token: user })).body;
+    expect(person.core_person).toBe(id);
+
+    const del = await op('contacts_people', id, 'delete', undefined, person.version);
+    expect(del.status).toBe(200);
+    expect((await core(id)).deleted).toBe(true);
+    expect((await op('contacts_people', id, 'restore', undefined, del.body.record.version)).status).toBe(200);
+    c = await core(id);
+    expect(c.deleted).toBe(false);
+    expect(c.phones).toHaveLength(1);
+  });
+
+  it('serve the reach-out and backlinks SQL views to the owner only', async () => {
+    const id = rid();
+    await op('contacts_entities', id, 'create', { kind: 'person', title: 'Ben Okafor', title_key: 'ben okafor' });
+    await op('contacts_people', id, 'create', { entity: id, display_name: 'Ben Okafor', cadence_days: 30, last_touch: '2026-10-01' });
+    const view = await api(`/api/collections/contacts_reach_out/records?filter=${encodeURIComponent(`entity="${id}"`)}`, { token: user });
+    expect(view.body.items[0]).toMatchObject({ display_name: 'Ben Okafor', due_on: '2026-10-31' });
+    const anon = await api('/api/collections/contacts_reach_out/records');
+    expect(anon.body.totalItems ?? 0).toBe(0);
+    const direct = await api('/api/collections/contacts_people/records', { token: user, body: { entity: id, display_name: 'x', owner: userId, version: 1 } });
+    expect(direct.status).toBe(403);
+  });
+});
+
 describe('access rules', () => {
   it('synced collections cannot be written directly by clients', async () => {
     const r = await api('/api/collections/core_people/records', { token: user, body: { displayName: 'Direct', owner: userId, version: 1 } });
