@@ -50,7 +50,7 @@ jobs:
           cp subapps/hello/release/*.zip subapps/hello/release/*.sha256 dist/
           (cd dist && sha256sum * > SHA256SUMS)
       - name: SBOM (CycloneDX)
-        uses: anchore/sbom-action@55dc4ee22412511ee8c3142cbea40418e6cec693 # v0.17.8
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
         with:
           format: cyclonedx-json
           output-file: dist/sbom.cdx.json
