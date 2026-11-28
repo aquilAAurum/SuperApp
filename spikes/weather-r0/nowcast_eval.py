@@ -32,7 +32,10 @@ LAT, LON = (float(sys.argv[4]), float(sys.argv[5])) if len(sys.argv) == 6 else (
 W, H, DLON, DLAT = 600, 450, 3.0, 2.25
 BBOX = (LON - DLON, LAT - DLAT, LON + DLON, LAT + DLAT)
 PX, PY = W // 2, H // 2  # the point is the image centre
-RAIN_DBZ, MOTION_DBZ, BOX = 20.0, 15.0, 2
+# Tunable from the environment for variants: NC_RAIN_DBZ, NC_BOX (half-width in px, ~1 km each).
+RAIN_DBZ = float(os.environ.get("NC_RAIN_DBZ", 20.0))
+MOTION_DBZ = 15.0
+BOX = int(os.environ.get("NC_BOX", 2))
 
 pal = np.array(Image.open(palette_png).getpalette()).reshape(-1, 3)[:256].astype(np.int64)
 # Vectorised colour -> palette index: pack RGB into one int and look it up with searchsorted.
@@ -169,6 +172,9 @@ for hour in merged:
         t += timedelta(minutes=5)
     if t0 is None:
         print(f"{hour:%Y-%m-%d %H:%M}Z  no clean radar onset at the point; skipped")
+        continue
+    if any(at_point(frame(t0 - timedelta(minutes=m))) >= RAIN_DBZ for m in range(5, 65, 5)):
+        print(f"{t0:%Y-%m-%d %H:%M}Z  rain within the hour before onset (intermittent); skipped")
         continue
     row = [f"{t0:%Y-%m-%d %H:%M}Z"]
     for lead in (60, 45, 30, 15):

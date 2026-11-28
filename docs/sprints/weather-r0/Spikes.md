@@ -8,7 +8,7 @@ Run 2026-11-28 from a cloud session (network: the Supra environment with the wea
 | :-- | :-- | :-- |
 | S-1 Sources | NWS, IEM radar, SWPC, EPA UV, Nominatim, Census, OpenFreeMap reachable and fit for personal self-hosted use. **RainViewer dropped nowcast on 2026-01-01** (free tier: past 2 h only, zoom ≤ 7). Open-Meteo free tier is < 10,000 calls/day per IP (hit from the shared cloud IP; fine from the mini PC). **CelesTrak unreachable from the cloud egress** (connection hangs). MADIS/CWOP redistribution is per provider and Synoptic's open tier is unclear, so citizen stations are not assured. | Keep the PRD's NOAA-first list. Drop RainViewer. Treat public citizen stations as optional (R1 uses NWS ASOS observations only) until MADIS/Synoptic terms are confirmed. Verify CelesTrak from the mini PC. |
 | S-2 Radar delivery | One bridge call per tile cannot work: a 24-frame loop is ~576 tiles and the bridge allows **50 calls/s per app** (≥ 11.5 s). Decoding is not the problem: the whole loop decodes in 0.44 s (CPU ×1) to 2.4 s (CPU ×6) in a sandboxed iframe; one composited image per frame takes 0.36–0.78 s. | **`weather.radarFrame` returns one server-composited image per frame** for the current viewport (24 calls per loop), cached on the mini PC. Base map: state/county outlines + roads drawn by the subapp (public-domain Census boundaries) rather than 2–2.6 MB of vector tiles per viewport plus MapLibre. On-phone timing (WX-10) still manual. |
-| S-3 Nowcast | See §S-3. | See §S-3. |
+| S-3 Nowcast | Simple radar extrapolation caught only **20–42 %** of rain onsets at Milford (Sep–Nov 2026, 20–27 events). When it did fire, timing was good (most within ±10 min), with **4–12 % false alarms** on dry checks. Most misses were light rain that formed in place rather than moving in. | **No-go for pushing "rain in N min" from extrapolation alone.** R2 shows it in the app only, as "possible". Pushes for rain starting use NWS hourly PoP plus HRRR 15-min. Follow-up S-3b: optical flow (pysteps) blended with HRRR 15-min, re-scored, with a push target of ≥ 70 % detected and ≤ 10 % false alarms. |
 | S-4 Google Calendar | Calendar API: an OAuth app left in *Testing* loses its refresh token after **7 days**; *In production* without verification is allowed for the owner alone (unverified-app warning, 100-user lifetime cap). Secret iCal address: no OAuth, has location and recurrence, but is a bearer secret per calendar and gives no incremental sync. | **Calendar API, app set to In production (unverified, owner only), `calendar.readonly`, `syncToken` polling every 10 min from the mini PC** (push needs a public HTTPS endpoint, which Supra does not have). Secret iCal address as the fallback if Google sign-in becomes a burden. |
 
 ## S-1 Data sources
@@ -84,7 +84,31 @@ The test posts all messages at once, so it measures decoding, not the bridge's r
 
 ## S-3 Nowcast ("rain starts in N min")
 
-_Results pending (run in progress)._
+Script: [`nowcast_eval.py`](../../../spikes/weather-r0/nowcast_eval.py).
+
+- **Method:** IEM NEXRAD N0Q composite frames every 5 min over a 6° × 4.5° box (~1 km/px) centred on Milford. Motion comes from phase correlation of the two frames 15 min apart. The latest frame is moved forward 5–90 min, and the predicted onset is the first lead at which the box around the point reaches the rain threshold.
+- **Truth:** the first radar frame in which the point actually had rain.
+- **Events:** rain onsets after ≥ 6 dry hours at KOWD, KBED or KORH (ASOS hourly, Sep 1 – Nov 28, 2026). Forecasts were issued 60, 45, 30 and 15 min before each onset. Dry controls were issued 3½–4 h before each onset; a control counts as a false alarm if it predicted rain within 60 min.
+
+| Variant | Events | Detected at T-60 / -45 / -30 / -15 | Timing error when detected | False alarms (dry controls) |
+| :-- | :-- | :-- | :-- | :-- |
+| A: ≥ 20 dBZ in a 5×5 km box, intermittent rain included | 24 | 38 % / 33 % / 38 % / 42 % | median −25 to +5 min; 4–5 per lead within ±10 min | 6 / 48 (12 %) |
+| B: as A, the point dry for the whole hour before onset | 20 | 25 % / 20 % / 30 % / 35 % | median 0 to +10 min; 4–5 within ±10 min | 2 / 40 (5 %) |
+| C: ≥ 15 dBZ in an 11×11 km box, dry hour required | 27 | 19 % / 19 % / 26 % / 33 % | median −10 to 0 min; up to 8 within ±10 min | 4 / 54 (7 %) |
+
+**Reading:**
+- The method is precise but misses most onsets. Autumn rain here is often light, widespread rain that develops in place, which pure motion extrapolation cannot see coming.
+- Variant A's "0 min" rows were rain already falling at issue time (intermittent showers), which is why B excludes them.
+- Caveats:
+  - The sample is small and holds few summer storms; moving thunderstorm lines, where extrapolation does best, are under-represented.
+  - Truth is the radar itself, not a rain gauge.
+  - HRRR was not scored, because archived HRRR 15-min tiles were not set up in this spike.
+
+**Decision proposed:**
+- No push notifications from extrapolation alone.
+- R2 shows "Rain possible in ~N min" in the app only when the method fires.
+- The §6.2 "rain starting" push uses the NWS hourly PoP crossing 50 % within 2 h, plus HRRR 15-min reflectivity at the point, with the radar extrapolation confirming the timing when it agrees.
+- **S-3b**, before any minute-scale push: pysteps optical flow blended with HRRR 15-min, re-scored on these events plus the next winter's snow onsets. Target: ≥ 70 % detected at T-30 and ≤ 10 % false alarms.
 
 ## S-4 Google Calendar access (for SA-2026-010)
 

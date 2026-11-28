@@ -118,7 +118,7 @@ All free/public; terms and attribution confirmed in spike S-1 before build. Prim
 | Future radar, 0–6 h | HRRR simulated reflectivity (15-min sub-hourly) | "Future radar" continuation of the loop, clearly marked *model*. |
 | Precip type | MRMS precipitation flag | Rain / snow / mix colouring. |
 | Overlays | NWS alert polygons (from the alerts feed), lightning (later, source TBD in S-1), temperature, wind | Toggleable layers. |
-| Nowcast "starts in N min" | Server-side: compare successive MRMS frames for motion vectors near each place (simple cross-correlation), cross-checked with HRRR 15-min | Minute-scale start/stop for the next 60–90 min; shown with a confidence and suppressed when the two disagree. |
+| Nowcast "starts in N min" | Server-side radar extrapolation (phase correlation of successive frames), cross-checked with HRRR 15-min | S-3 ([results](../sprints/weather-r0/Spikes.md#s-3-nowcast-starts-in-n-min)): extrapolation alone caught only 20–42 % of onsets, though it was well timed when it fired (4–12 % false alarms). So it is **shown in the app as "possible" only**. Pushes wait for S-3b (optical flow + HRRR blend; target ≥ 70 % detected at T-30, ≤ 10 % false alarms). |
 
 Map (S-2): the subapp draws a light base itself (state and county outlines, major roads and place labels from public-domain Census cartographic files, served once by the mini PC and cached) under the composited radar image. Vector base tiles (OpenFreeMap) cost 2.0–2.6 MiB per viewport plus the MapLibre library, so they are a later option. RainViewer is not used: its free API dropped nowcast on 2026-01-01.
 
@@ -165,7 +165,7 @@ Warnings (tornado, severe thunderstorm, flash flood, winter storm, blizzard, ice
 
 | Trigger (defaults; tunable) | Example message |
 | :-- | :-- |
-| Precip starts within 60 min at a place (nowcast, both sources agree) | "Rain starting at home in ~20 min, about an hour." |
+| Precip likely to start within 2 h: NWS hourly PoP ≥ 50 % and HRRR 15-min shows precipitation at the place (minute-level "in ~N min" only after S-3b meets its target) | "Rain likely from about 3 pm." |
 | Precip type changes (rain → snow/ice) within 6 h | "Rain turns to snow around 9 pm." |
 | Temperature change ≥ 15 °F within 3 h, or crossing 32 °F with wet ground | "Falling to 30° by 6 pm; wet roads may freeze." |
 | Gusts ≥ 40 mph, or +20 mph above now, within 6 h | "Gusts to 45 mph after 4 pm." |
@@ -180,7 +180,7 @@ Compared against the last notified snapshot per day. Notify when: a day gains or
 ### 6.4 Notification budget
 
 - Per place and trigger type, one notification per 3 h; the same condition is not re-announced unless it worsens.
-- Quiet hours (default 22:00–07:00): only NWS warnings and nowcast for places where the owner currently is.
+- Quiet hours (default 22:00–07:00): only NWS warnings and "rain likely" alerts for the place where the owner currently is.
 - Each notification states the source and links to the detail. Every sent and suppressed notification is logged (Diagnostics, app id `weather`).
 
 ## 7. Agenda integration
@@ -267,7 +267,7 @@ Out of scope: horoscope astrology (O-1), email delivery (O-5; push only), metric
 | :-- | :-- | :-- |
 | S-1 (done, [results](../sprints/weather-r0/Spikes.md)) | Terms, rate limits and attribution for NWS, IEM tiles, nowCOAST, MADIS/Synoptic public data, AirNow, SWPC, CelesTrak, Open-Meteo; lightning source | Source table with "allowed for personal self-hosted use: yes/no", required attribution text |
 | S-2 (done) | Radar delivery: bridge tile transfer vs server-composited frames; base map source; loop performance on the phone | Measured timings, chosen approach |
-| S-3 | Nowcast quality: MRMS motion vs HRRR for "starts in N min" on 10 recorded events | Hit/miss and timing error; go/no-go for push |
+| S-3 (done; S-3b follow-up) | Nowcast quality: MRMS motion vs HRRR for "starts in N min" on 10 recorded events | Hit/miss and timing error; go/no-go for push |
 | S-4 (done) | Google Calendar access for SA-2026-010 (both sources decided, O-3): Calendar API with OAuth on the server vs a private ICS feed; sync interval; which calendars | Recommendation for SA-2026-010 |
 
 ## 12. Open questions (Nick)
