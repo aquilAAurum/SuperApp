@@ -2,7 +2,7 @@
 
 - **Feature ID:** SA-2026-009
 - **Doc ID:** D02 (PRD)   · **Producer:** Qz   · **Consumers:** Jane, Jules, Priya, Kumi Wai, Russ, Theo
-- **Version:** 0.1   · **Status:** Proposal (scoping, for Nick's approval; no code)   · **Date:** 2026-11-28
+- **Version:** 0.2   · **Status:** Proposal (scoping; O-1, O-2, O-3, O-6 decided by Nick 2026-11-28; no code)   · **Date:** 2026-11-28
 - **Owner(s):** Qz (content), Nick (approval)   · **T-Shirt Size:** L (four releases, §9)
 - **Subapp id:** `weather` (collections `weather_*`, events `weather.*`, deep links `superapp://weather/...`)
 - **Depends on:** SA-2026-003 (data and sync), SA-2026-004 (M4: `device.location`, `notify.post`), SA-2026-005 (M5: bus, inbox, deep links), the M6 server-proxy pattern, and an **agenda** (SA-2026-010, proposed in §7; none exists yet).
@@ -33,7 +33,7 @@ Three jobs, in this order:
 5. **Phone privileges only through Supra.** Location and notifications go through the bridge with consent. The subapp makes no network calls; the mini PC talks to NOAA (SA-C3, spec §Integrations).
 6. **Calm visuals.** Same token set as EatWell; colour is never the only signal (radar legend has values, alerts have text severity); 48 px targets; WCAG 2.1 AA.
 
-"Astrological guidance" in the request is read as **astronomical** sky events (aurora, meteors, eclipses, planets, moon). Horoscope-style astrology is out of scope unless Nick says otherwise (O-1).
+"Astrological guidance" in the request means **astronomical** sky events (aurora, meteors, eclipses, planets, moon). Horoscope-style astrology is out of scope (O-1, decided by Nick 2026-11-28).
 
 ## 3. Architecture
 
@@ -59,7 +59,7 @@ Why the server does the work:
 | `weather_refresh` | cron, every 15 min (alerts every 5 min) | For each active place: NWS hourly + gridpoint data (hourly ≤ 1×/h, ETag/`If-Modified-Since`), active alerts, nearest station observations; writes `weather_snapshots`, runs change detection (§6) and the agenda check (§7.3). |
 | `weather_nowcast` | cron, every 5 min, only for places with precipitation within 150 km | Radar-derived "starts/stops in N min" for each place (§4.2). |
 | `weather_sky` | cron, hourly | SWPC Kp and aurora (OVATION) forecast; computes moon, planets, meteor-shower peaks, eclipses, ISS passes for each place; combines with cloud cover into `weather_sky_events`. |
-| `weather_brief` | cron, every minute, fires per owner at **19:00 local** (settings timezone, DST-safe) | Builds the nightly brief (§5) and posts it. |
+| `weather_brief` | cron, every minute, fires at **19:00 in the phone's timezone** (§3.3; fallback `America/New_York`, DST-safe) | Builds the nightly brief (§5) and posts it. |
 | `GET /api/sa/weather/radar/frames` | route | Frame list (past 2 h at 5–10 min, future 0–6 h from HRRR) with timestamps and source. |
 | `GET /api/sa/weather/radar/tile/:layer/:t/:z/:x/:y` | route | Proxied, cached PNG tile (server-side LRU, 24 h max). |
 | `GET /api/sa/weather/point?lat&lon` | route | On-demand forecast for an ad-hoc point (agenda event location, "search a place"). Coordinates rounded to 0.01° (~1 km) before leaving the mini PC. |
@@ -79,6 +79,17 @@ A new `weather.*` namespace with scope `weather.read` (no consent sheet: it expo
 Forecasts, alerts, sky events and conflicts are ordinary synced collections read with `data.*` / `data.subscribe`, so they work offline from the mirror. Current position uses `device.location` (M4, consent).
 
 Tile transfer over the bridge is the main performance risk (≈ 15–40 KB per tile, ~12 tiles × 24 frames per loop). Spike S-2 measures it; fallback is server-composited frames (one image per frame for the viewport).
+
+### 3.3 Location and timezone (O-2, decided)
+
+The forecast follows the phone; there is no fixed "home" in R1.
+
+| Input | Source | Fallback |
+| :-- | :-- | :-- |
+| **Location** | Phone GPS through `device.location` (consent). Read when the weather app opens and when the shell resumes with weather granted; the shell writes the rounded position (0.01°) to the `current` place in `weather_places` through ops. | **Milford, MA** (42.14, −71.52) when location is denied, unavailable, or older than 24 h. The app and the brief say "Using Milford, MA (location unavailable)". |
+| **Timezone** | The phone's IANA timezone (`Intl.DateTimeFormat().resolvedOptions().timeZone`), written to `weather_settings.timezone` on every app open and shell resume, so travel moves the 7 pm brief with the owner. | `America/New_York` (Milford's zone) when the phone has never reported one. |
+
+The server always forecasts for the last known `current` place, so warnings and the 7 pm brief still work while the phone is asleep. Background location updates (phone asleep, owner travelling) need WorkManager, which is "Later" in the spec; until then the position is as fresh as the last time Supra was opened, and its age is shown. Extra saved places (work, cabin) and agenda locations are optional and use the same pipeline.
 
 ## 4. Data sources
 
@@ -128,7 +139,7 @@ Citizen stations are noisy. A station is used only if: reported in the last 30 m
 
 ## 5. The 7 pm nightly brief
 
-Posted at 19:00 in the owner's timezone, every day (can be turned off or moved in Settings; quiet-hours rules do not delay it). Short notification text; tapping opens `superapp://weather/brief/<date>`.
+Posted at 19:00 in the phone's timezone (§3.3), for the phone's last known location (fallback Milford, MA), every day (can be turned off or moved in Settings; quiet-hours rules do not delay it). Short notification text; tapping opens `superapp://weather/brief/<date>`.
 
 **Notification (≤ 2 lines):** "Tomorrow: 41°/28°, rain 2–5 pm (70 %). Snow Thu 3–6 in ↑. Hike at 1 pm may be wet."
 
@@ -208,14 +219,14 @@ Severity: *heads-up* (chance), *likely*, *warning* (NWS alert). Each conflict re
 
 | Collection | Holds | Notes |
 | :-- | :-- | :-- |
-| `weather_places` | Owner's places: name, rounded lat/lon, NWS grid and nearest stations (cached), flags (home, work, follow-me) | Few records. "Follow me" place is updated from `device.location` when the app is open (and later, a coarse background update). |
+| `weather_places` | Owner's places: name, rounded lat/lon, NWS grid and nearest stations (cached), flag `current` (from the phone, §3.3) or saved | Few records. The `current` place is seeded as Milford, MA and replaced by the phone's rounded GPS position when available. |
 | `weather_snapshots` | Per place, per refresh: hourly 48 h, daily 7 d (with precip/snow/ice ranges), current obs, sources and fetch times | Keep 14 days (feeds diffs); older purged by cron. |
 | `weather_alerts` | Active/recent NWS alerts per place (CAP id, event, severity, onset, ends, headline, polygon) | Keep 30 days. |
 | `weather_nowcasts` | Latest start/stop prediction per place | Overwritten. |
 | `weather_sky_events` | Upcoming sky events per place with viewing score | Rolling 14 days. |
 | `weather_briefs` | Nightly brief content per date | Keep 90 days. |
 | `weather_conflicts` | Agenda conflicts (event, rule, severity, status, snapshot) | Cleared conflicts kept 14 days. |
-| `weather_settings` | Units, brief time and on/off, quiet hours, thresholds, notification toggles per trigger, sky interests | One live record. |
+| `weather_settings` | Phone timezone (§3.3), units, brief time and on/off, quiet hours, thresholds, notification toggles per trigger, sky interests | One live record. |
 
 All synced (version, soft delete, owner-only rules). Server-derived collections are written by the hooks, not by the phone; the phone writes only `weather_places` and `weather_settings` through ops.
 
@@ -230,7 +241,7 @@ All synced (version, soft delete, owner-only rules). Server-derived collections 
 | **R3 — Sky** | Aurora (Kp, OVATION, storm alerts), moon/sun/twilight, meteor showers, eclipses, planets, ISS passes, viewing score, "Tonight's sky" in the brief and push for *good* aurora nights. | — |
 | **R4 — Agenda guard** | Conflict engine, badges in the agenda view, conflict notifications, route sampling for drives. | SA-2026-010 Agenda (Google Calendar sync, `core_agenda_events`), M5 bus |
 
-Out of scope: horoscope astrology (unless O-1 says otherwise), pollen (no NOAA source), marine/aviation products, ads, social features, AI chat about weather (could reuse `ai.chat` later to summarise the forecast discussion).
+Out of scope: horoscope astrology (O-1), pollen (no NOAA source), marine/aviation products, ads, social features, AI chat about weather (could reuse `ai.chat` later to summarise the forecast discussion).
 
 ## 10. Acceptance (draft)
 
@@ -246,6 +257,7 @@ Out of scope: horoscope astrology (unless O-1 says otherwise), pollen (no NOAA s
 | WX-8 | Stale data (> 2 h for forecast, > 30 min for obs/radar) is labelled on every screen | E2E |
 | WX-9 | Home, brief, radar, sky, settings pass axe WCAG 2.1 AA | E2E |
 | WX-10 | Radar loop of 24 frames is playable within 3 s on the phone over Tailscale | Manual on phone (S-2 target) |
+| WX-11 | With location denied or older than 24 h, forecast and brief use Milford, MA and say so; with no reported timezone the brief fires at 19:00 `America/New_York`; a timezone change on the phone moves the next brief | Unit (fallback resolver, fake clock) + E2E |
 
 ## 11. Spikes
 
@@ -254,16 +266,16 @@ Out of scope: horoscope astrology (unless O-1 says otherwise), pollen (no NOAA s
 | S-1 | Terms, rate limits and attribution for NWS, IEM tiles, nowCOAST, MADIS/Synoptic public data, AirNow, SWPC, CelesTrak, Open-Meteo; lightning source | Source table with "allowed for personal self-hosted use: yes/no", required attribution text |
 | S-2 | Radar delivery: bridge tile transfer vs server-composited frames; base map source; loop performance on the phone | Measured timings, chosen approach |
 | S-3 | Nowcast quality: MRMS motion vs HRRR for "starts in N min" on 10 recorded events | Hit/miss and timing error; go/no-go for push |
-| S-4 | Agenda source: Google Calendar API via server (OAuth) vs ICS feed vs Supra-native only | Recommendation for SA-2026-010 |
+| S-4 | Google Calendar access for SA-2026-010 (both sources decided, O-3): Calendar API with OAuth on the server vs a private ICS feed; sync interval; which calendars | Recommendation for SA-2026-010 |
 
 ## 12. Open questions (Nick)
 
 | ID | Question | Recommendation |
 | :-- | :-- | :-- |
-| O-1 | "Astrological guidance": astronomy (aurora, meteors, eclipses, planets) only, or also horoscope astrology? | Astronomy only. |
-| O-2 | Which places to seed (home, work, others) and the home timezone for the brief? | Home + work; timezone from the server settings. |
-| O-3 | Agenda source: Google Calendar (which calendars), Supra-native, or both? | Google Calendar read-only via server, plus native events (S-4). |
+| O-1 | "Astrological guidance": astronomy only, or also horoscope astrology? | **Decided (Nick, 2026-11-28): astronomy only.** |
+| O-2 | Which location and timezone drive the forecast and the brief? | **Decided (Nick, 2026-11-28): the phone's GPS location and timezone; Milford, MA (`America/New_York`) when unavailable** (§3.3). |
+| O-3 | Agenda source: Google Calendar, Supra-native, or both? | **Decided (Nick, 2026-11-28): both.** Google Calendar read-only via the server plus Supra-native events; which calendars and API vs ICS in S-4. |
 | O-4 | Units: °F/mph/in (default) or metric? | Imperial, switchable. |
 | O-5 | Should the brief also go to email (Gmail) when the phone is off, or phone only? | Phone only in R1. |
-| O-6 | Is ntfy push (spec §Push) acceptable to run on the mini PC for overnight warnings? Without it, alerts arrive only when the shell next syncs. | Yes; R1 depends on it. |
+| O-6 | Is ntfy push (spec §Push) acceptable to run on the mini PC for overnight warnings? | **Decided (Nick, 2026-11-28): yes.** Self-hosted ntfy on the mini PC; R1 depends on it. |
 | O-7 | Own weather station or Home Assistant sensors to include? | Add via Home Assistant in M6 if one exists. |
