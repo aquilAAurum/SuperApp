@@ -33,7 +33,7 @@ To: Janus
 | R-4 | Android build | Writer Deploys | debug APK produced | produced | — | artifact `superapp-debug-apk` |
 | R-5 | AC-2.2 on device | KPI 1 | < 500 ms on 3 cold launches | **45 ms** on the first reading; 2 more pending | Critical | M-1, Diagnostics → Apps (owner screenshot 2026-11-28) |
 | R-6 | AC-3.4 on device | HB-DATA-02 | DB unreadable without key | **PASS**: first 16 bytes `81 ac 92 46 12 ea 6c e0 b6 62 e5 b2 2c 22 7f 21` (plain SQLite would start `SQLite format 3`) | Critical | M-2, `adb shell run-as … head -c 16 … \| od` |
-| R-8 | Offline sync on device | AC-3.1 | Offline writes survive and sync on reconnect | **PASS**: 105 notes written in airplane mode (5 + 100), 1 edit; outbox 105 → 0 after reconnect, nothing in Needs attention. Server count of 105 to be confirmed in the admin UI | Critical | M-3 (owner screenshots 2026-11-28) |
+| R-8 | Offline sync on device | AC-3.1 | Offline writes survive and sync on reconnect | **PASS**: 105 notes written in airplane mode (5 + 100), 1 edit; outbox 105 → 0 after reconnect, nothing in Needs attention. Server: `hello_notes` total 106 (the offline batch plus notes added after reconnect), every record `owner` = owner, `origin_device` = Pixel 10 Pro XL; the twice-edited note at `version` 3; outbox 0 | Critical | M-3 (owner screenshots 2026-11-28) |
 | R-9 | Back navigation on device | SA-U4 | Back returns to launcher | **PASS** | High | M-4 (owner report) |
 | R-10 | Sandbox on Android WebView 158 | T-05 | network, parent DOM, storage, cookies blocked | **PASS**: all four blocked | Critical | Hello isolation check on device |
 | R-11 | Scope denial on device | T-03, KPI 3 | `SCOPE_DENIED`, logged with app, method, code, time | **PASS** | High | Diagnostics error log on device |
