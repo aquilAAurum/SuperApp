@@ -25,7 +25,14 @@ powershell -ExecutionPolicy Bypass -File tools\install-windows.ps1
 
 - **Owner account:** in the admin UI (`http://127.0.0.1:8090/_/`), create the owner in `users`.
 - **Integrations (M6):** add Home Assistant, Jellyfin and Anthropic entries in `core_integrations` via the admin UI only. Never put these values in the repo or on the phone.
-- **Windows:** disable sleep; BIOS "restore on AC power loss"; Windows Update active hours with restarts at 04:00.
+- **Windows:** disable sleep; BIOS "restore on AC power loss".
+- **Tailscale at boot:** `tailscale up --unattended` (connects before anyone signs in; set 2026-11-28). `tailscale serve status` must still show `https://<pc>.<tailnet>.ts.net/ → 127.0.0.1:8090` after a restart.
+- **Windows Update (no surprise restarts):** the mini PC runs **Windows 11 Home** (`Get-ComputerInfo` reports "Windows 10 Home" on 11). Home largely ignores the update policies under `HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU` (set anyway on 2026-11-28: `AUOptions = 2` notify-only, `NoAutoRebootWithLoggedOnUsers = 1`). What works on Home:
+  1. Settings → Network & Internet → the active connection → **Metered connection: On** (holds back most automatic update downloads).
+  2. Settings → Windows Update → **Pause updates** (up to 5 weeks; renew).
+  3. Windows Update → Advanced options → **Active hours** as wide as allowed.
+  Install updates by hand at a quiet time (monthly at least), then check the services (below). If Windows restarts anyway, both services are Automatic and Tailscale is unattended, so Supra comes back on its own (verified after the overnight restart on 2026-11-28).
+- **After any restart:** `Get-Service superapp-pocketbase, Tailscale`, `Invoke-RestMethod http://127.0.0.1:8090/api/health`, `tailscale serve status`.
 - **Later deploys:** `powershell -ExecutionPolicy Bypass -File tools\deploy-server.ps1` (copies migrations and hooks, restarts the service).
 
 ### 1.1 Subapp updates (ADR-009)
@@ -39,6 +46,16 @@ powershell -ExecutionPolicy Bypass -File tools\sync-subapps.ps1 -Register # then
 ```
 
 The task runs as the signed-in user (uses the checkout's existing git credentials). Check it: Task Scheduler → *Supra subapp sync* → Last Run Result; PocketBase logs show `subapps.imported` / `subapps.import_rejected`. On the phone, Settings → Subapps shows each app's version and source; *Check for updates* pulls now.
+
+### 1.2 Today projections (ADR-011)
+
+Today's agenda items and glance cards are projected from Contacts and EatWell on every write, and also rebuilt in full within a minute of each PocketBase start, nightly at 00:07 local time, and on demand. The log line is `agenda.rebuilt` with counts. To rebuild now (e.g. after restoring a backup), sign in to the admin UI and run, with a superuser token:
+
+```powershell
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8090/api/sa/agenda/rebuild -Headers @{ Authorization = "<superuser token>" }
+```
+
+Restarting the service (`Restart-Service superapp-pocketbase`) does the same.
 
 ## 2. Phone
 

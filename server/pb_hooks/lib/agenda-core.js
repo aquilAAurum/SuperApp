@@ -271,6 +271,61 @@ function syncEatwellDay(app, hash, owner, date) {
   upsert(app, "core_glances", projectedId(hash, owner, "eatwell:intake:" + date), owner, want, GLANCE_FIELDS);
 }
 
+/**
+ * Rebuilds every projection from the source collections. Projections otherwise only follow writes,
+ * so data that existed before Today shipped (or was restored from a backup) would never appear.
+ * Idempotent: upsert skips records that already match. Each record is guarded on its own, so one
+ * bad row cannot stop the rest. Returns counts for logs and the superuser endpoint.
+ */
+function rebuildAll(app, hash, today) {
+  var counts = { keyDates: 0, people: 0, eatwellDays: 0 };
+  var each = function (collection, filter, fn) {
+    for (var page = 0; ; page++) {
+      var batch = app.findRecordsByFilter(collection, filter, "id", 200, page * 200);
+      if (batch.length === 0) break;
+      for (var i = 0; i < batch.length; i++) fn(batch[i]);
+      if (batch.length < 200) break;
+    }
+  };
+  each("contacts_key_dates", "deleted = false", function (kd) {
+    guarded("syncKeyDate", function () {
+      syncKeyDate(app, hash, kd.id, today);
+    });
+    counts.keyDates++;
+  });
+  each("contacts_people", "deleted = false", function (p) {
+    guarded("syncReachOut", function () {
+      syncReachOut(app, hash, p.id);
+    });
+    counts.people++;
+  });
+  // Today's intake card per owner; past days are not shown on Today.
+  var date = ymd(today);
+  var owners = {};
+  ["eatwell_entries", "eatwell_water"].forEach(function (c) {
+    each(c, "date = '" + date + "'", function (r) {
+      owners[r.getString("owner")] = true;
+    });
+  });
+  Object.keys(owners).forEach(function (owner) {
+    guarded("syncEatwellDay", function () {
+      syncEatwellDay(app, hash, owner, date);
+    });
+    counts.eatwellDays++;
+  });
+  return counts;
+}
+
+/** rebuildAll for today's local date, logged as one JSON line; never throws. */
+function rebuildLogged(app, hash, reason) {
+  var counts = null;
+  guarded("rebuildAll", function () {
+    counts = rebuildAll(app, hash, new Date(new Date().toDateString()));
+  });
+  console.log(JSON.stringify({ level: "info", msg: "agenda.rebuilt", reason: reason, counts: counts }));
+  return counts;
+}
+
 module.exports = {
   ymd: ymd,
   parseYmd: parseYmd,
@@ -284,5 +339,7 @@ module.exports = {
   syncKeyDate: syncKeyDate,
   syncReachOut: syncReachOut,
   syncEatwellDay: syncEatwellDay,
+  rebuildAll: rebuildAll,
+  rebuildLogged: rebuildLogged,
   DAY: DAY,
 };

@@ -50,13 +50,24 @@ for (const c of ["eatwell_entries", "eatwell_water"]) {
   }, c);
 }
 
-// Recurring dates roll forward: refresh every key date once a day, after midnight local time.
-cronAdd("agenda_key_dates", "7 0 * * *", () => {
-  const lib = require(`${__hooks}/lib/agenda-core.js`);
-  const today = new Date(new Date().toDateString());
-  for (let page = 0; ; page++) {
-    const batch = $app.findRecordsByFilter("contacts_key_dates", "deleted = false", "id", 200, page * 200);
-    if (batch.length === 0) break;
-    for (const kd of batch) lib.guarded("syncKeyDate", () => lib.syncKeyDate($app, (s) => $security.md5(s), kd.id, today));
-  }
+// Full rebuild: once within a minute of each server start (fills Today from data that predates it
+// or came from a restore), nightly after midnight local time (recurring dates roll forward), and on
+// demand. JSVM has no onServe hook, so the startup run is a per-minute cron guarded by the app's
+// in-memory store (cleared on restart). Handlers cannot see top-level functions here, so logic is in lib.
+cronAdd("agenda_rebuild_startup", "* * * * *", () => {
+  if ($app.store().has("agenda.rebuilt")) return;
+  $app.store().set("agenda.rebuilt", true);
+  require(`${__hooks}/lib/agenda-core.js`).rebuildLogged($app, (s) => $security.md5(s), "startup");
 });
+
+cronAdd("agenda_rebuild", "7 0 * * *", () => {
+  require(`${__hooks}/lib/agenda-core.js`).rebuildLogged($app, (s) => $security.md5(s), "nightly");
+});
+
+// Rebuild now (superuser only): used by tests and after a manual import.
+routerAdd(
+  "POST",
+  "/api/sa/agenda/rebuild",
+  (e) => e.json(200, require(`${__hooks}/lib/agenda-core.js`).rebuildLogged(e.app, (s) => $security.md5(s), "manual") || {}),
+  $apis.requireSuperuserAuth(),
+);

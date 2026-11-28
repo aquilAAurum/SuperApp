@@ -169,7 +169,8 @@
   {#if nn.next && plan.isToday}
     <p class="next">Next: <strong>{nn.next.item.title}</strong> at {fmtClock(nn.next.startMin)} ({until(nn.next.startMin)})</p>
   {/if}
-  {#if plan.isToday}
+  {#if plan.isToday && plan.timeline.some((e) => e.type === 'item')}
+    <!-- With nothing timed, this would repeat the free-time line above (off by the 5-minute rounding). -->
     <p class="muted small">{fmtDuration(plan.freeMinutes)} free for the rest of the day</p>
   {/if}
 </section>

@@ -286,6 +286,24 @@ describe('Today projections (SA-2026-009, ADR-011)', () => {
     expect(res.body.items[0]).toMatchObject({ key: 'intake', value: 300, unit: 'kcal', detail: '500 ml water' });
   });
 
+  it('rebuild restores projections for data that predates Today (superuser only)', async () => {
+    const id = rid();
+    await op('contacts_entities', id, 'create', { kind: 'person', title: 'Dev Rao', title_key: 'dev rao' });
+    await op('contacts_people', id, 'create', { entity: id, display_name: 'Dev Rao', next_touch: '2030-04-02' });
+    const [reach] = await agenda(`contacts:reach_out:${id}`);
+    expect(reach).toBeTruthy();
+    // Simulate pre-existing data: remove the projection behind the hooks' back.
+    expect((await api(`/api/collections/core_agenda/records/${reach!.id}`, { method: 'DELETE', token: su })).status).toBe(204);
+    expect(await agenda(`contacts:reach_out:${id}`)).toHaveLength(0);
+
+    expect((await api('/api/sa/agenda/rebuild', { method: 'POST', token: user })).status).toBeGreaterThanOrEqual(401);
+    const r = await api('/api/sa/agenda/rebuild', { method: 'POST', token: su });
+    expect(r.status).toBe(200);
+    expect(r.body.people).toBeGreaterThanOrEqual(1);
+    const [again] = await agenda(`contacts:reach_out:${id}`);
+    expect(again).toMatchObject({ id: reach!.id, title: 'Reach out to Dev Rao', start: '2030-04-02', deleted: false });
+  });
+
   it('core_agenda accepts items from apps through ops and rejects malformed times', async () => {
     const ok = await op('core_agenda', rid(), 'create', { kind: 'focus', title: 'Deep work', start: '2030-03-01T09:00', end: '2030-03-01T10:30', source_app: 'shell', status: 'open' });
     expect(ok.status).toBe(200);
