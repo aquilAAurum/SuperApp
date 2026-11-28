@@ -38,6 +38,24 @@ test.describe('EatWell subapp', () => {
     expect(server.ops.liveRecords('eatwell_entries')[0]).toMatchObject({ meal: 'breakfast', name: 'Banana', servings: 2, kcal: 210, food_ref: 'b:banana', date: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) });
   });
 
+  test('search finds plurals and database foods, logged by weight', async ({ page, server }) => {
+    await openEatWell(page);
+    const f = eatwell(page);
+    await f.getByRole('button', { name: 'Add food to Lunch' }).click();
+    await f.getByLabel('Search foods').fill('eggs');
+    await expect(f.getByTestId('food-result').first()).toContainText('Egg');
+    await f.getByLabel('Search foods').fill('chobani');
+    await f.getByTestId('food-result').first().click();
+    await f.getByLabel('Unit').selectOption('g');
+    await f.getByLabel('Amount').fill('150');
+    await f.getByTestId('serving-submit').click();
+    await expect.poll(() => server.ops.liveRecords('eatwell_entries').length, { timeout: 15_000 }).toBe(1);
+    expect(server.ops.liveRecords('eatwell_entries')[0]).toMatchObject({ meal: 'lunch', serving_label: '100 g', servings: 1.5, food_ref: expect.stringMatching(/^u:/) });
+    await f.getByRole('button', { name: 'Add food to Lunch' }).click();
+    await f.getByLabel('Search foods').fill('zzqx');
+    await expect(f.getByTestId('food-empty')).toContainText('Nothing matches');
+  });
+
   test('without Health Connect (browser shell) EatWell explains instead of offering Connect', async ({ page }) => {
     await openEatWell(page);
     const f = eatwell(page);

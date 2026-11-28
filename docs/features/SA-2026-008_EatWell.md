@@ -29,6 +29,8 @@ EatWell (aquilAAurum/EatWell, earlier "NutriSnap") is a standalone vibe-coded ap
 | R2 | `eatwell` | Barcode scan and packaged-food search (camera via M4 `files.pick`/camera; OpenFoodFacts through a server proxy, M6 pattern, so the phone never calls it directly). Copy a previous day / meal. Per-meal reminders (opt-in, `notify.post`). Import from the old app's JSON export. | Planned |
 | R3 | `mealplan` | Weekly meal planner (own recipes, family variants); logs planned meals into EatWell over the bus (M5 `eatwell.entry.create` request). Optional AI meal ideas via `ai.chat` (M6) with no coaching. | Planned |
 
+**R1.1 (0.2.0, after first phone use):** search returned nothing for ordinary words because the list had 139 foods and plurals did not match ("eggs" vs "Egg"). Fixed by singular-insensitive matching and a bundled reference database of 6,494 foods per 100 g (TempoLife dataset, CC-BY-4.0, mostly USDA SR Legacy; attribution in the Foods tab, `subapps/eatwell/data/README.md`), logged by weight (g or oz). Curated foods with real servings still rank first. Shipped as a subapp update (ADR-009), no APK.
+
 Out of scope: ads, coaching, social features, a subscription tier, AI photo calorie estimation (unreliable; may return as an explicit "estimate" in R3).
 
 ## 4. Data (server: `server/pb_migrations/1764460800_eatwell.js`)

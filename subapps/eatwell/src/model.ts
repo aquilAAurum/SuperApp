@@ -1,6 +1,7 @@
 // EatWell model: pure functions over the eatwell_* records (no DOM, no SDK) so the numbers the owner
 // relies on (budget, totals, macros, trends) are unit-tested. Amounts are metric internally.
 import { BUILTIN_FOODS, type BuiltinFood } from './foods.ts';
+import { dbFoods } from './fooddb.ts';
 
 export const COLLECTIONS = {
   entries: 'eatwell_entries',
@@ -326,7 +327,8 @@ export interface Loggable extends Nutrients {
   name: string;
   brand?: string;
   serving_label: string;
-  source: 'builtin' | 'own' | 'recent';
+  /** builtin: curated with real servings; db: reference database, per 100 g (logged by weight). */
+  source: 'builtin' | 'db' | 'own' | 'recent';
   favorite: boolean;
   gentle?: boolean;
 }
@@ -365,30 +367,59 @@ export function catalog(raw: Raw): Loggable[] {
   const favs = favoriteRefs(raw);
   const own = raw.foods.filter((f) => !f.deleted && !f.builtin_ref).map(loggableFromOwn);
   const builtin = BUILTIN_FOODS.map((f) => loggableFromBuiltin(f, Boolean(favs.get(builtinRef(f))?.favorite)));
-  return [...own, ...builtin];
+  const db = dbFoods().map((f): Loggable => ({ ref: f.ref, name: f.name, serving_label: PER_100G, source: 'db', favorite: Boolean(favs.get(f.ref)?.favorite), ...f.n }));
+  return [...own, ...builtin, ...db];
 }
 
-const norm = (s: string) => s.toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]+/g, ' ').trim();
+/** Serving label of database foods: amounts are logged by weight (servings = grams / 100). */
+export const PER_100G = '100 g';
+export const isByWeight = (f: { serving_label?: string }) => f.serving_label === PER_100G;
 
-/** Ranked search: every query word must prefix a word of name/brand; own foods and favorites first. */
-export function searchFoods(items: Loggable[], query: string, limit = 40): Loggable[] {
-  const q = norm(query).split(/\s+/).filter(Boolean);
+const norm = (s: string) => s.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9 ]+/g, ' ').trim();
+
+/** Crude English singular, enough that "eggs", "potatoes", "berries" find "egg", "potato", "berry". */
+export function stem(w: string): string {
+  if (w.length > 4 && w.endsWith('ies')) return `${w.slice(0, -3)}y`;
+  if (w.length > 4 && /(oes|ches|shes|xes|sses)$/.test(w)) return w.slice(0, -2);
+  if (w.length > 3 && w.endsWith('s') && !w.endsWith('ss')) return w.slice(0, -1);
+  return w;
+}
+const words = (s: string) => norm(s).split(/\s+/).filter(Boolean).map(stem);
+
+/** Name tokens per food object, computed once (the catalog has thousands of entries). */
+const tokenCache = new WeakMap<object, { name: string; words: string[] }>();
+const tokensOf = (f: Loggable, key: object) => {
+  let t = tokenCache.get(key);
+  if (!t) tokenCache.set(key, (t = { name: norm(f.name), words: words(`${f.name} ${f.brand ?? ''}`) }));
+  return t;
+};
+
+/**
+ * Ranked search: every query word (singularised) must prefix a word of the name or brand. Own foods,
+ * favorites and curated foods (real serving sizes) rank above the reference database; within a
+ * group, names that start with the query and shorter names come first.
+ */
+export function searchFoods(items: Loggable[], query: string, limit = 50): Loggable[] {
+  const q = words(query);
   if (!q.length) return [];
+  const phrase = norm(query);
   const scored: { f: Loggable; s: number }[] = [];
   for (const f of items) {
-    const name = norm(f.name);
-    const words = `${name} ${norm(f.brand ?? '')}`.split(/\s+/).filter(Boolean);
-    if (!q.every((t) => words.some((w) => w.startsWith(t)))) continue;
+    const t = tokensOf(f, dbKey.get(f.ref) ?? f);
+    if (!q.every((qw) => t.words.some((w) => w.startsWith(qw)))) continue;
     let s = 0;
-    if (name.startsWith(q.join(' '))) s += 10;
-    if (words[0]?.startsWith(q[0]!)) s += 4;
-    if (f.source === 'own') s += 20;
-    if (f.favorite) s += 8;
-    s -= name.length / 40;
+    if (t.name.startsWith(phrase)) s += 10;
+    if (t.words[0]?.startsWith(q[0]!)) s += 6;
+    if (f.source === 'own') s += 30;
+    if (f.favorite) s += 20;
+    if (f.source === 'builtin') s += 8;
+    s -= t.name.length / 25;
     scored.push({ f, s });
   }
   return scored.sort((a, b) => b.s - a.s || a.f.name.localeCompare(b.f.name)).slice(0, limit).map((x) => x.f);
 }
+/** Database foods are rebuilt per catalog() call; cache their tokens by the stable ref instead. */
+const dbKey = new Map<string, object>(dbFoods().map((f) => [f.ref, f]));
 
 /** Distinct foods from recent entries, newest first, replayable with one tap. */
 export function recentFoods(raw: Raw, limit = 20): Loggable[] {
