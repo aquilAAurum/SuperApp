@@ -1,6 +1,6 @@
 {
   "name": "@superapp/subapp-contacts",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Supra Contacts: reach-out queue, people search, contact cards and the network graph over the contacts_* collections (SA-2026-007).",
   "license": "UNLICENSED",

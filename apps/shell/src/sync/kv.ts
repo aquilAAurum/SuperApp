@@ -5,6 +5,11 @@
  * every caller that touches both uses one `commit()`.
  */
 export type Table = 'mirror' | 'outbox' | 'meta';
+
+/** Exclusive upper bound of the keys that start with `prefix`: the prefix with its last character incremented. */
+export function prefixEnd(prefix: string): string {
+  return prefix.slice(0, -1) + String.fromCharCode(prefix.charCodeAt(prefix.length - 1) + 1);
+}
 export const TABLES: readonly Table[] = ['mirror', 'outbox', 'meta'];
 
 export interface KvWrite {
@@ -16,8 +21,8 @@ export interface KvWrite {
 
 export interface KvBackend {
   get<T>(table: Table, key: string): Promise<T | undefined>;
-  /** All entries of a table, ordered by key. */
-  list<T>(table: Table): Promise<{ key: string; value: T }[]>;
+  /** Entries of a table ordered by key; with `prefix`, only keys starting with it (an index range, not a scan). */
+  list<T>(table: Table, prefix?: string): Promise<{ key: string; value: T }[]>;
   /** Applies all writes atomically: either every write lands or none does. */
   commit(writes: KvWrite[]): Promise<void>;
 }
@@ -32,8 +37,9 @@ export class MemoryKv implements KvBackend {
     return v === undefined ? undefined : (JSON.parse(v) as T);
   }
 
-  async list<T>(table: Table): Promise<{ key: string; value: T }[]> {
+  async list<T>(table: Table, prefix?: string): Promise<{ key: string; value: T }[]> {
     return [...this.tables.get(table)!.entries()]
+      .filter(([key]) => prefix === undefined || key.startsWith(prefix))
       .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
       .map(([key, v]) => ({ key, value: JSON.parse(v) as T }));
   }
@@ -57,8 +63,8 @@ export class DeferredKv implements KvBackend {
   async get<T>(table: Table, key: string): Promise<T | undefined> {
     return (await this.ready).get<T>(table, key);
   }
-  async list<T>(table: Table): Promise<{ key: string; value: T }[]> {
-    return (await this.ready).list<T>(table);
+  async list<T>(table: Table, prefix?: string): Promise<{ key: string; value: T }[]> {
+    return (await this.ready).list<T>(table, prefix);
   }
   async commit(writes: KvWrite[]): Promise<void> {
     return (await this.ready).commit(writes);

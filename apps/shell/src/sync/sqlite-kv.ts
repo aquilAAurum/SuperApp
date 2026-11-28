@@ -1,4 +1,4 @@
-import type { KvBackend, KvWrite, Table } from './kv.ts';
+import { prefixEnd, type KvBackend, type KvWrite, type Table } from './kv.ts';
 
 /** The SQL surface the CapabilityBroker exposes (the plugin itself is imported only there). */
 export interface SqlDatabase {
@@ -22,9 +22,13 @@ export class SqliteKv implements KvBackend {
     return rows[0] ? (JSON.parse(rows[0].value) as T) : undefined;
   }
 
-  async list<T>(table: Table): Promise<{ key: string; value: T }[]> {
+  async list<T>(table: Table, prefix?: string): Promise<{ key: string; value: T }[]> {
     await this.ready;
-    const rows = await this.db.query<{ key: string; value: string }>('SELECT key, value FROM kv WHERE tbl = ? ORDER BY key', [table]);
+    // Range on the (tbl, key) primary key: reads only the matching rows across the native bridge.
+    const rows =
+      prefix === undefined
+        ? await this.db.query<{ key: string; value: string }>('SELECT key, value FROM kv WHERE tbl = ? ORDER BY key', [table])
+        : await this.db.query<{ key: string; value: string }>('SELECT key, value FROM kv WHERE tbl = ? AND key >= ? AND key < ? ORDER BY key', [table, prefix, prefixEnd(prefix)]);
     return rows.map((r) => ({ key: r.key, value: JSON.parse(r.value) as T }));
   }
 

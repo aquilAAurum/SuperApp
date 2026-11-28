@@ -1,4 +1,4 @@
-import { TABLES, type KvBackend, type KvWrite, type Table } from './kv.ts';
+import { TABLES, prefixEnd, type KvBackend, type KvWrite, type Table } from './kv.ts';
 
 /**
  * IndexedDB backend for the browser build (dev and E2E). Not used on Android, where the
@@ -31,17 +31,18 @@ export class IndexedDbKv implements KvBackend {
     });
   }
 
-  async list<T>(table: Table): Promise<{ key: string; value: T }[]> {
+  async list<T>(table: Table, prefix?: string): Promise<{ key: string; value: T }[]> {
     const t = await this.tx([table], 'readonly');
     const store = t.objectStore(table);
+    const range = prefix === undefined ? undefined : IDBKeyRange.bound(prefix, prefixEnd(prefix), false, true);
     const [keys, values] = await Promise.all([
       new Promise<IDBValidKey[]>((res, rej) => {
-        const r = store.getAllKeys();
+        const r = store.getAllKeys(range);
         r.onsuccess = () => res(r.result);
         r.onerror = () => rej(r.error);
       }),
       new Promise<T[]>((res, rej) => {
-        const r = store.getAll();
+        const r = store.getAll(range);
         r.onsuccess = () => res(r.result as T[]);
         r.onerror = () => rej(r.error);
       }),

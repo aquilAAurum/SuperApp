@@ -120,8 +120,10 @@ export class DataService {
    */
   async applyServerRecords(collection: string, records: SyncRecord[]): Promise<string[]> {
     const changed: MirrorEntry[] = [];
+    // One range read for the collection, not one native round trip per record (a first catch-up is thousands).
+    const existing = records.length > 1 ? new Map((await this.store.listEntries(collection)).map((e) => [e.record.id, e])) : null;
     for (const r of records) {
-      const e = await this.store.getEntry(collection, r.id);
+      const e = existing ? existing.get(r.id) : await this.store.getEntry(collection, r.id);
       if (e && e.pending > 0) continue;
       const version = Number(r.version ?? 0);
       if (e && e.confirmedVersion >= version) continue;

@@ -3,7 +3,7 @@
 // writes only contacts_* through @superapp/sdk; everything works offline from the shell's mirror.
 // DOM is built with createElement/textContent only (HB-SEC-04).
 import { connect, BridgeError } from '@superapp/sdk';
-import { watchAll } from './data.ts';
+import { watchAll, type LoadState, type Watch } from './data.ts';
 import {
   COLLECTIONS,
   TOUCH_KINDS,
@@ -55,7 +55,8 @@ let view: View = { name: 'today' };
 const history: View[] = [];
 let query = '';
 let kindFilter: 'person' | 'organization' | 'other' | 'all' = 'person';
-let loaded = false;
+let loadState: LoadState = { phase: 'loading', done: 0, total: 0 };
+let watch: Watch | null = null;
 
 function toast(text: string, kind: 'ok' | 'error' = 'ok'): void {
   const t = $('toast');
@@ -110,8 +111,23 @@ function renderToday(m: Model): Node[] {
   const out: Node[] = [heading('Today')];
   const b = banner(m);
   if (b) out.push(b);
+  if (loadState.phase === 'error' && m.entities.size === 0) {
+    out.push(
+      h('p', { class: 'c-error', role: 'alert', 'data-testid': 'load-error', text: `Couldn't load your contacts from this phone (${loadState.message}).` }),
+      h('button', { type: 'button', class: 'c-primary', onclick: () => watch?.reloadAll() }, 'Retry'),
+    );
+    return out;
+  }
+  if (loadState.phase === 'loading' && m.entities.size === 0) {
+    const n = loadState.total ? ` (${loadState.done} of ${loadState.total})` : '';
+    out.push(h('p', { class: 'c-empty', role: 'status', 'data-testid': 'loading', text: `Loading your contacts${n}…` }));
+    return out;
+  }
   if (m.entities.size === 0) {
-    out.push(h('p', { class: 'c-empty', 'data-testid': 'empty-import', text: loaded ? 'No contacts yet. Import your vault with supra-contacts push, then they appear here.' : 'Loading contacts…' }));
+    out.push(
+      h('p', { class: 'c-empty', 'data-testid': 'empty-import', text: 'No contacts on this phone yet.' }),
+      h('p', { class: 'c-sub', text: 'Right after a vault push, the first download from your server can take a few minutes; this screen fills in by itself. Keep Supra open, and check the sync status on the launcher.' }),
+    );
     return out;
   }
   out.push(h('p', { class: 'c-summary', 'data-testid': 'today-summary', text: `${due.length} due this week (${overdue} overdue)` }));
@@ -450,10 +466,9 @@ async function main(): Promise<void> {
   document.documentElement.dataset.theme = ctx.theme;
   await sa.app.ready();
   let first = true;
-  await watchAll(sa, (raw) => {
+  watch = await watchAll(sa, (raw) => {
     const t0 = performance.now();
     model = buildModel(raw, localToday());
-    loaded = true;
     $('main').dataset.loaded = 'true';
     $('main').dataset.entities = String(model.entities.size);
     if (first) void sa.sys.log('info', 'contacts.loaded', { entities: model.entities.size, people: model.personByEntity.size, ms: Math.round(performance.now() - t0) });
@@ -461,6 +476,10 @@ async function main(): Promise<void> {
     const editing = view.name === 'card' && view.mode;
     if (!editing && !graph) render(first);
     first = false;
+  }, (s) => {
+    loadState = s;
+    $('main').dataset.load = s.phase;
+    if (s.phase !== 'ready' && !graph && view.name === 'today') render(false);
   });
   sa.data.onSyncFailed((e) => {
     if (e.collection.startsWith('contacts_')) toast(`A change needs attention (${e.status}). Open the Sync centre in Supra to resolve it.`, 'error');

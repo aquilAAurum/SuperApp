@@ -7,6 +7,7 @@ import type { OutboxRow } from './store.ts';
 
 function setup() {
   const fake = new FakeOpsServer();
+  const clock = { t: 1_000_000, lists: 0 };
   const events: { appId: string; topic: string; payload: unknown }[] = [];
   const engine = new SyncEngine({
     kv: new MemoryKv(),
@@ -15,12 +16,17 @@ function setup() {
     emit: (appId, topic, payload) => events.push({ appId, topic, payload }),
     server: {
       sendOp: (row: OutboxRow) => fake.send(row),
-      listSince: async (c, since) => fake.since(c, since ?? ''),
+      listSince: async (c, since) => {
+        clock.lists++;
+        await new Promise((r) => setTimeout(r, 5));
+        return fake.since(c, since ?? '');
+      },
       getRecord: async (c, id) => fake.records.get(`${c}/${id}`) ?? null,
     },
     debounceMs: 0,
+    now: () => clock.t,
   });
-  return { engine, fake, events };
+  return { engine, fake, events, clock };
 }
 
 describe('SyncEngine', () => {
@@ -95,5 +101,23 @@ describe('SyncEngine', () => {
     await engine.sync();
     expect(fake.records.get(`hello_notes/${record.id}`)).toMatchObject({ n: 2, version: 3 });
     expect(engine.status.get().label).toBe('Synced');
+  });
+
+  it('runs one catch-up per collection at a time and reuses a recent one for reads', async () => {
+    const { engine, fake, clock } = setup();
+    fake.apply({ opId: 'remote-op-0002', collection: 'hello_notes', recordId: 'remote000000002', op: 'create', payload: { n: 1 } });
+    await engine.setOnline(true);
+    // A subapp paging a big collection: three reads at once start one server download, not three.
+    const results = await Promise.all([engine.refresh('hello_notes', { maxAgeMs: 10_000 }), engine.refresh('hello_notes', { maxAgeMs: 10_000 }), engine.refresh('hello_notes')]);
+    expect(clock.lists).toBe(1);
+    expect(results.every((r) => r.length === 1)).toBe(true);
+    clock.t += 5_000;
+    expect(await engine.refresh('hello_notes', { maxAgeMs: 10_000 })).toEqual([]);
+    expect(clock.lists).toBe(1); // within 10 s of the last one: reused
+    await engine.refresh('hello_notes'); // resume/subscribe-style: always runs
+    expect(clock.lists).toBe(2);
+    clock.t += 11_000;
+    await engine.refresh('hello_notes', { maxAgeMs: 10_000 });
+    expect(clock.lists).toBe(3);
   });
 });
