@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Contacts</title>
+    <style>
+      /* Values follow the shell token set v1.0.0 (apps/shell/src/styles/tokens.css); no new tokens (D03). */
+      :root { color-scheme: light dark; --bg: #ffffff; --surface: #f4f5f7; --text: #15181d; --muted: #5a6270; --border: #d5d9e0; --accent: #2952cc; --accent-text: #ffffff;
+              --danger: #b3261e; --warning: #8a5300; --success: #1e7a3d; --focus: #2952cc; --tap: 48px; --r: 10px; }
+      @media (prefers-color-scheme: dark) { :root:not([data-theme='light']) { --bg: #111317; --surface: #1c1f25; --text: #e7e9ee; --muted: #a3aab6; --border: #343943; --accent: #8fa8ff; --accent-text: #0b1020; --danger: #ffb4ab; --warning: #ffcc80; --success: #7dd99a; --focus: #8fa8ff; } }
+      :root[data-theme='dark'] { --bg: #111317; --surface: #1c1f25; --text: #e7e9ee; --muted: #a3aab6; --border: #343943; --accent: #8fa8ff; --accent-text: #0b1020; --danger: #ffb4ab; --warning: #ffcc80; --success: #7dd99a; --focus: #8fa8ff; }
+      * { box-sizing: border-box; } [hidden] { display: none !important; }
+      body { font: 16px/1.45 system-ui, sans-serif; margin: 0; background: var(--bg); color: var(--text); }
+      #app { display: flex; flex-direction: column; min-height: 100vh; }
+      #main { flex: 1; padding: 12px 16px 96px; max-width: 760px; width: 100%; margin: 0 auto; }
+      h2 { font-size: 1.4rem; margin: 4px 0 8px; } h2:focus { outline: none; }
+      h3 { font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 20px 0 6px; }
+      button, input, textarea, select { font: inherit; color: inherit; }
+      button { min-height: var(--tap); padding: 0 16px; border-radius: var(--r); border: 1px solid var(--border); background: var(--surface); cursor: pointer; }
+      button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+      input, textarea { width: 100%; min-height: var(--tap); padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--r); background: var(--bg); }
+      .c-primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600; }
+      .c-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+      .c-row { width: 100%; text-align: left; display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; padding: 10px 14px; min-height: 56px; }
+      .c-row-title { font-weight: 600; overflow-wrap: anywhere; }
+      .c-row-sub { grid-column: 1; color: var(--muted); font-size: .9rem; overflow-wrap: anywhere; }
+      .c-row .c-health { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
+      .c-compact .c-row { min-height: var(--tap); padding: 6px 12px; }
+      .c-health { font-size: .9rem; font-weight: 600; white-space: nowrap; }
+      .c-overdue { color: var(--danger); } .c-due, .c-soon { color: var(--warning); } .c-ok { color: var(--success); } .c-none { color: var(--muted); }
+      .c-summary, .c-sub, .c-empty { color: var(--muted); margin: 4px 0 12px; }
+      .c-banner { background: var(--surface); border-left: 4px solid var(--warning); padding: 8px 12px; border-radius: 6px; font-size: .9rem; }
+      .c-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+      .c-chip[aria-pressed='true'] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); font-weight: 600; }
+      .c-label { display: block; font-weight: 600; margin: 0 0 4px; }
+      .c-dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 0; }
+      .c-dl dt { color: var(--muted); } .c-dl dd { margin: 0; overflow-wrap: anywhere; }
+      .c-select { user-select: all; -webkit-user-select: all; }
+      .c-invalid { color: var(--danger); }
+      .c-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+      .c-back { margin: 0 0 8px; }
+      .c-link { border: 0; background: none; color: var(--accent); padding: 0 4px; text-decoration: underline; }
+      .c-form { background: var(--surface); padding: 12px; border-radius: var(--r); margin: 12px 0; }
+      .c-field { margin-bottom: 12px; }
+      .c-error { color: var(--danger); margin: 4px 0 0; font-size: .9rem; }
+      .c-timeline { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+      .c-notes { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--surface); padding: 10px 12px; border-radius: var(--r); font-size: .95rem; }
+      #tabs { position: fixed; bottom: 0; left: 0; right: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 6px 8px calc(6px + env(safe-area-inset-bottom)); background: var(--bg); border-top: 1px solid var(--border); }
+      #tabs button[aria-current='page'] { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+      #toast { position: fixed; left: 16px; right: 16px; bottom: 76px; margin: 0 auto; max-width: 520px; padding: 12px 14px; border-radius: var(--r); background: var(--text); color: var(--bg); }
+      #toast[data-kind='error'] { background: var(--danger); color: var(--bg); }
+      @media (prefers-reduced-motion: no-preference) { button { transition: border-color .15s; } }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <main id="main" data-view="today" aria-labelledby="view-heading"></main>
+      <nav id="tabs" aria-label="Contacts">
+        <button type="button" data-view="today">Today</button>
+        <button type="button" data-view="people">People</button>
+        <button type="button" data-view="graph">Graph</button>
+      </nav>
+      <p id="toast" role="status" aria-live="polite" hidden></p>
+    </div>
+    <div id="graph" hidden></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

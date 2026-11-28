@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Super app</string>
-    <string name="title_activity_main">Super app</string>
+    <string name="app_name">~Supra~</string>
+    <string name="title_activity_main">~Supra~</string>
     <string name="package_name">dev.superapp.shell</string>
     <string name="custom_url_scheme">dev.superapp.shell</string>
 </resources>

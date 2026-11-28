@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'dev.superapp.shell',
-  appName: 'Super app',
+  appName: '~Supra~',
   webDir: 'dist',
   android: {
     // Release builds must not be debuggable from Chrome DevTools.

@@ -122,6 +122,19 @@ importers:
 
   server: {}
 
+  subapps/contacts:
+    dependencies:
+      '@superapp/sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
+    devDependencies:
+      vite:
+        specifier: ^8.3.8
+        version: 8.3.8(@types/node@26.6.6)
+      vite-plugin-singlefile:
+        specifier: ^2.3.4
+        version: 2.3.4(vite@8.3.8(@types/node@26.6.6))
+
   subapps/hello:
     dependencies:
       '@superapp/sdk':

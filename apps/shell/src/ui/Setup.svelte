@@ -35,7 +35,7 @@
 </script>
 
 <section class="setup">
-  <h1>Set up Super app</h1>
+  <h1>Set up ~Supra~</h1>
   <p class="muted">Connect to your mini PC over Tailscale or your home network.</p>
   <form onsubmit={submit} novalidate>
     <label for="server-url">Server URL</label>

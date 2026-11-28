@@ -55,7 +55,7 @@
 
 <section class="section">
   <h2>About</h2>
-  <p>Super app shell {SHELL_VERSION}</p>
+  <p>~Supra~ shell {SHELL_VERSION}</p>
 </section>
 
 <style>

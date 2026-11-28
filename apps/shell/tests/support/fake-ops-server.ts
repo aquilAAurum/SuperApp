@@ -24,7 +24,7 @@ export class FakeOpsServer implements OpTransport {
 
   constructor(
     readonly userId = 'user00000000001',
-    readonly synced: (c: string) => boolean = (c) => c.startsWith('core_') || c.startsWith('hello_'),
+    readonly synced: (c: string) => boolean = (c) => c.startsWith('core_') || c.startsWith('hello_') || c.startsWith('contacts_'),
   ) {}
 
   private store() {

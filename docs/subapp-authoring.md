@@ -1,6 +1,6 @@
 # Writing a subapp
 
-A subapp is a static web bundle plus `app.json`, hosted by the shell in a sandboxed iframe. It reaches everything (data, device, other apps, integrations) through `@superapp/sdk`. See `subapps/hello` for a complete example.
+A subapp is a static web bundle plus `app.json`, hosted by the shell in a sandboxed iframe. It reaches everything (data, device, other apps, integrations) through `@superapp/sdk`. See `subapps/hello` for a complete example, and `subapps/contacts` for a larger one (paged reads past the 500-row `subscribe` window, forms, a canvas view).
 
 ## Rules (lint- and shell-enforced)
 
