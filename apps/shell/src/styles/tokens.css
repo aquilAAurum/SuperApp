@@ -40,6 +40,12 @@
   --tile-size: 88px;
   --motion-duration: 0.2s;
   --shadow-raised: 0 1px 3px rgb(0 0 0 / 0.12);
+
+  /* System bar insets (Android edge-to-edge, viewport-fit=cover; Capacitor SystemBars). 0 in browsers. */
+  --inset-top: env(safe-area-inset-top, 0px);
+  --inset-bottom: env(safe-area-inset-bottom, 0px);
+  --inset-left: env(safe-area-inset-left, 0px);
+  --inset-right: env(safe-area-inset-right, 0px);
 }
 
 @media (prefers-color-scheme: dark) {

@@ -14,7 +14,7 @@
     position: fixed;
     left: var(--space-4);
     right: var(--space-4);
-    bottom: var(--space-4);
+    bottom: calc(var(--space-4) + var(--inset-bottom));
     display: flex;
     flex-direction: column;
     gap: var(--space-2);

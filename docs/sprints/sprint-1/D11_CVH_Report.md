@@ -10,7 +10,7 @@ To: Janus → Nick
 | Section | Owner | Status | Evidence |
 | :-- | :-- | :-- | :-- |
 | Security / Red Team | Mara | Partial | Threat model T-01…T-19 each mapped to a test; red-team E2E (forged handshake, sandbox escape probes) green. CodeQL results from the new Advanced setup not yet seen. Secret scanning not enabled. |
-| Non-functional QA & a11y | Russ | Partial | D10: automated PASS; manual M-1/M-2 not run; no endurance test yet (shell is not long-running server software, 48 h test not applicable) |
+| Non-functional QA & a11y | Russ | PASS | D10 PASS: automated and device run (M-1 45/47/27 ms, M-2, M-3, M-4); no endurance test yet (shell is not long-running server software, 48 h test not applicable) |
 | Legal / Privacy / Licence | Priya | PASS with notes | D18 |
 | Commercial viability | Qz | PASS | Personal system: cost = mini PC power + Tailscale free tier; no per-user cost. Go-to-market: n/a (sideloaded, single owner) |
 | Operational readiness | Theo | Partial | Runbook draft (`docs/runbook.md`); no release dry-run (no tag yet); backup/restore not tested; signing keystore not configured |
@@ -30,11 +30,11 @@ To: Janus → Nick
 | HB-SUP-01…04 | PASS | Step 0, lockfile, audit, dependency review on PR |
 | HB-SUP-05 | PASS | `.github/dependabot.yml` |
 | HB-DATA-01 | PASS | Profile §5 |
-| HB-DATA-02 | **Pending** | Implemented (ADR-004); manual check M-2 |
+| HB-DATA-02 | PASS | M-2 on device 2026-11-28: database header is ciphertext (D10 R-6) |
 | HB-DATA-03 | PASS | logger redaction tests |
 | HB-LEG-01 | PASS | dependency-review licence policy; D18 |
 | HB-LEG-02 | N/A | Not distributed |
 
-**To reach PASS:** run M-1 and M-2 (Russ), confirm HB-SEC-02 and the first CodeQL Advanced run (Nick/Mara), and a release dry-run with rollback (Theo). Each is listed in D13 next steps.
+**To reach PASS:** confirm HB-SEC-02 and the first CodeQL Advanced run (Nick/Mara), and a release dry-run with rollback (Theo). Each is listed in D13 next steps.
 
 From: MRB (Mara, Russ, Priya, Qz, Theo)

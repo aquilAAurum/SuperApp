@@ -69,8 +69,8 @@ Everything product-specific lives here; Core personas read these values. A Profi
 | :--- | :--- | :--- |
 | Developer workstation | `pnpm dev` (shell in browser), subapps standalone via SDK dev mock | Active |
 | CI (GitHub Actions, ubuntu-24.04) | Required checks, debug APK artifact, PocketBase integration | Active (`.github/workflows/ci.yml`) |
-| Mini PC (Windows 11) | PocketBase service (NSSM) behind Tailscale Serve HTTPS; Home Assistant OS VM, Jellyfin | **Manual prerequisite** (runbook §1). Step 0 reports it as MANUAL. |
-| Phone (Android, sideloaded) | Production shell | Manual: install APK from Release or CI artifact |
+| Mini PC (Windows 11) | PocketBase service (NSSM) behind Tailscale Serve HTTPS; Home Assistant OS VM, Jellyfin | **Active** since 2026-11-28 (PocketBase via `tools/install-windows.ps1`; HA and Jellyfin not yet). Step 0 reports it as MANUAL. |
+| Phone (Android, sideloaded) | Production shell | **Active** since 2026-11-28 (debug APK via `adb`) |
 
 ## 7. Required Status Checks on `main` (Kumi Wai specifies → Nick applies in Settings → Branches)
 
@@ -107,7 +107,7 @@ Status as of Sprint 1. "Wired" = gate exists in CI; "Green in CI" = it has passe
 | HB-SUP-06/07 SBOM, provenance | Wired | `release.yml` |
 | HB-ELEC-* | N/A | Platform is Capacitor, not Electron. The WebView analogues are SA-C3, SA-C6, Step 0 manifest checks and the shell CSP (THREAT_MODEL T-07). |
 | HB-DATA-01 Inventory | Done | §5 |
-| HB-DATA-02 Encryption at rest | Done on device (pending D10 check) | Tokens in Keystore; mirror/outbox SQLCipher (ADR-004). Backups encrypted off-box (runbook). |
+| HB-DATA-02 Encryption at rest | Done (verified on device 2026-11-28, D10 R-6) | Tokens in Keystore; mirror/outbox SQLCipher (ADR-004). Backups encrypted off-box (runbook). |
 | HB-DATA-03 No secrets in logs | Wired | `logger.ts` redaction + unit test |
 | HB-REL-01 Tag-only builds | Wired | `release.yml` |
 | HB-REL-02 Signing | Wired, keystore pending | Secrets in `release` environment (manual) |
