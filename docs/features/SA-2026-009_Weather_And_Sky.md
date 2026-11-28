@@ -2,7 +2,7 @@
 
 - **Feature ID:** SA-2026-009
 - **Doc ID:** D02 (PRD)   · **Producer:** Qz   · **Consumers:** Jane, Jules, Priya, Kumi Wai, Russ, Theo
-- **Version:** 0.4   · **Status:** Proposal (scoping; O-1 to O-7 decided by Nick 2026-11-28; O-8 deferred until a station is bought; no code)   · **Date:** 2026-11-28
+- **Version:** 0.5   · **Status:** Proposal (scoping; O-1 to O-7 decided by Nick 2026-11-28; O-8 deferred until a station is bought; no code)   · **Date:** 2026-11-28
 - **Owner(s):** Qz (content), Nick (approval)   · **T-Shirt Size:** L (four releases, §9)
 - **Subapp id:** `weather` (collections `weather_*`, events `weather.*`, deep links `superapp://weather/...`)
 - **Depends on:** SA-2026-003 (data and sync), SA-2026-004 (M4: `device.location`, `notify.post`), SA-2026-005 (M5: bus, inbox, deep links), the M6 server-proxy pattern, and an **agenda** (SA-2026-010, proposed in §7; none exists yet).
@@ -73,12 +73,12 @@ A new `weather.*` namespace with scope `weather.read` (no consent sheet: it expo
 | Method | Returns |
 | :-- | :-- |
 | `weather.radarFrames({ bbox })` | Frame list from the route above. |
-| `weather.radarTile({ layer, t, z, x, y })` | `{ mime, dataBase64 }`; the subapp turns it into a `blob:` URL (the subapp CSP already allows `img-src data: blob:`). |
+| `weather.radarFrame({ layer, t, bbox, width, height })` | One **server-composited** image for the viewport, `{ mime, dataBase64 }` (8-bit PNG or WebP); the subapp turns it into a `blob:` URL (the subapp CSP already allows `img-src data: blob:`). One call per frame: 24 calls per loop. |
 | `weather.point({ lat, lon })` | Forecast for an ad-hoc point (rate-limited per app). |
 
 Forecasts, alerts, sky events and conflicts are ordinary synced collections read with `data.*` / `data.subscribe`, so they work offline from the mirror. Current position uses `device.location` (M4, consent).
 
-Tile transfer over the bridge is the main performance risk (≈ 15–40 KB per tile, ~12 tiles × 24 frames per loop). Spike S-2 measures it; fallback is server-composited frames (one image per frame for the viewport).
+Spike S-2 ([results](../sprints/weather-r0/Spikes.md#s-2-radar-delivery)) ruled out one call per tile: a loop is ~576 tiles and the bridge allows 50 calls/s per app (≥ 11.5 s). Decoding is cheap (whole loop 0.4–2.4 s at CPU ×1–×6; composited frames 0.4–0.8 s). The mini PC composites each frame from IEM tiles and caches it; panning or zooming requests a new set.
 
 ### 3.3 Location and timezone (O-2, decided)
 
@@ -104,11 +104,11 @@ All free/public; terms and attribution confirmed in spike S-1 before build. Prim
 | Watches, warnings, advisories | `/alerts/active?point={lat},{lon}` (CAP) | Severity, certainty, urgency, onset/ends; updated every 5 min. |
 | Discussion (optional) | `/products?type=AFD&location={wfo}` | Forecaster reasoning; shown collapsed for "why". |
 | Official observations | `/stations/{id}/observations/latest` (ASOS/AWOS near each place) | Truth for "now" and pressure trend. |
-| Public weather stations | **MADIS** (includes CWOP citizen stations, mesonets) and **Synoptic** public data, if their terms allow | Hyper-local temperature, wind and rain rate; quality-filtered (§4.3). Weather Underground PWS API is excluded (requires a contributing station and limits reuse). |
+| Public weather stations (optional, after R1) | **MADIS** (includes CWOP citizen stations, mesonets) and **Synoptic** public data, only once their terms are confirmed (S-1: MADIS redistribution is per provider; Synoptic's open tier is unclear). R1 uses NWS ASOS/AWOS observations only | Hyper-local temperature, wind and rain rate; quality-filtered (§4.3). Weather Underground PWS API is excluded (requires a contributing station and limits reuse). |
 | **Owner's weather station** (later, R5; O-7: none owned yet) | Read by the mini PC from the station's local API on the LAN, or from Home Assistant once it runs on the mini PC (M6); a vendor cloud key, if one is needed, lives in `core_integrations` and never reaches the phone. Brand and connection in O-8. | **First source for "now" at the station's location** (temperature, humidity, wind/gusts, rain rate and daily total, pressure trend). Rain rate > 0 at the station confirms a nowcast start; its pressure trend feeds §6.2. |
 | Air quality | AirNow API (EPA; free key held in `core_integrations`) | AQI + pollutant, forecast. |
 | UV | EPA UV index forecast (Envirofacts) | Hourly UV by ZIP/city. |
-| Fallback / outside the US | Open-Meteo (no key) | Used only when NWS is down or the place is outside NWS coverage; labelled. |
+| Fallback / outside the US | Open-Meteo (no key; non-commercial, < 10,000 calls/day per IP, CC BY 4.0 "Weather data by Open-Meteo.com") | Used only when NWS is down or the place is outside NWS coverage; labelled. |
 
 ### 4.2 Radar (the MyRadar part)
 
@@ -120,7 +120,7 @@ All free/public; terms and attribution confirmed in spike S-1 before build. Prim
 | Overlays | NWS alert polygons (from the alerts feed), lightning (later, source TBD in S-1), temperature, wind | Toggleable layers. |
 | Nowcast "starts in N min" | Server-side: compare successive MRMS frames for motion vectors near each place (simple cross-correlation), cross-checked with HRRR 15-min | Minute-scale start/stop for the next 60–90 min; shown with a confidence and suppressed when the two disagree. |
 
-Map: MapLibre GL or Leaflet bundled inside the single-file subapp, with a lightweight base map (OSM-derived vector tiles proxied and cached the same way, or a pre-rendered region pack). Base map source is decided in S-2.
+Map (S-2): the subapp draws a light base itself (state and county outlines, major roads and place labels from public-domain Census cartographic files, served once by the mini PC and cached) under the composited radar image. Vector base tiles (OpenFreeMap) cost 2.0–2.6 MiB per viewport plus the MapLibre library, so they are a later option. RainViewer is not used: its free API dropped nowcast on 2026-01-01.
 
 ### 4.3 Station quality
 
@@ -135,7 +135,7 @@ Citizen stations are noisy. A station is used only if: reported in the last 30 m
 | Planets (bright, conjunctions, oppositions) | Computed (same library). |
 | Eclipses (solar, lunar) | Computed; local contact times and magnitude. |
 | Meteor showers | Static IMO calendar (peak, ZHR) per year, scored with moonlight and cloud cover. |
-| ISS and bright satellite passes | CelesTrak TLE + SGP4 (`satellite.js`) on the server; magnitude estimate, only evening/morning visible passes. |
+| ISS and bright satellite passes | CelesTrak TLE (fetched at most every 2–6 h, cached; reachability from the mini PC to be checked, it did not answer from the cloud) + SGP4 (`satellite.js`) on the server; magnitude estimate, only evening/morning visible passes. |
 | Viewing score | Combines darkness (moon, twilight), forecast cloud cover, and the event; shown as *good / fair / poor* with the reasons. |
 
 ## 5. The 7 pm nightly brief
@@ -189,7 +189,7 @@ Compared against the last notified snapshot per day. Notify when: a day gains or
 
 Supra has no agenda collection, calendar subapp, or calendar integration. The weather guard needs one. Proposal **SA-2026-010 Agenda** (separate PRD), minimal for this feature:
 
-- Server-side **Google Calendar sync** (OAuth refresh token in `core_integrations`, never on the phone; read-only at first), plus events created in Supra.
+- Server-side **Google Calendar sync** (OAuth refresh token in `core_integrations`, never on the phone; read-only at first), plus events created in Supra. S-4 proposes the Calendar API with the OAuth app set to *In production* (an app left in *Testing* loses its refresh token after 7 days), `calendar.readonly`, and `syncToken` polling every 10 min; secret iCal addresses as the fallback.
 - Core collection `core_agenda_events`: title, start/end, all-day, timezone, location text, geocoded `lat/lon` (server geocoder: US Census, then Nominatim; rounded), optional destination for trips (`to_lat/to_lon`), `kind` (`outdoor`, `travel`, `indoor`, `unknown`), source id.
 - An `agenda` subapp (day/week list) that shows weather badges, and the shell "Today" surface later.
 
@@ -265,10 +265,10 @@ Out of scope: horoscope astrology (O-1), email delivery (O-5; push only), metric
 
 | ID | Question | Output |
 | :-- | :-- | :-- |
-| S-1 | Terms, rate limits and attribution for NWS, IEM tiles, nowCOAST, MADIS/Synoptic public data, AirNow, SWPC, CelesTrak, Open-Meteo; lightning source | Source table with "allowed for personal self-hosted use: yes/no", required attribution text |
-| S-2 | Radar delivery: bridge tile transfer vs server-composited frames; base map source; loop performance on the phone | Measured timings, chosen approach |
+| S-1 (done, [results](../sprints/weather-r0/Spikes.md)) | Terms, rate limits and attribution for NWS, IEM tiles, nowCOAST, MADIS/Synoptic public data, AirNow, SWPC, CelesTrak, Open-Meteo; lightning source | Source table with "allowed for personal self-hosted use: yes/no", required attribution text |
+| S-2 (done) | Radar delivery: bridge tile transfer vs server-composited frames; base map source; loop performance on the phone | Measured timings, chosen approach |
 | S-3 | Nowcast quality: MRMS motion vs HRRR for "starts in N min" on 10 recorded events | Hit/miss and timing error; go/no-go for push |
-| S-4 | Google Calendar access for SA-2026-010 (both sources decided, O-3): Calendar API with OAuth on the server vs a private ICS feed; sync interval; which calendars | Recommendation for SA-2026-010 |
+| S-4 (done) | Google Calendar access for SA-2026-010 (both sources decided, O-3): Calendar API with OAuth on the server vs a private ICS feed; sync interval; which calendars | Recommendation for SA-2026-010 |
 
 ## 12. Open questions (Nick)
 
