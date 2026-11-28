@@ -257,3 +257,39 @@ describe('published subapps (ADR-009)', () => {
     }
   });
 });
+
+describe('Today projections (SA-2026-009, ADR-011)', () => {
+  const op = (collection: string, recordId: string, o: string, payload?: Record<string, unknown>, baseVersion?: number) =>
+    api('/api/sa/ops', { token: user, body: { opId: opId(), collection, recordId, op: o, ...(payload ? { payload } : {}), ...(baseVersion ? { baseVersion } : {}) } });
+  const agenda = async (key: string) =>
+    (await api(`/api/collections/core_agenda/records?filter=${encodeURIComponent(`source_key="${key}"`)}`, { token: user })).body.items as Record<string, unknown>[];
+
+  it('projects a contact key date and a reach-out due date into core_agenda', async () => {
+    const id = rid();
+    await op('contacts_entities', id, 'create', { kind: 'person', title: 'Cleo Park', title_key: 'cleo park' });
+    await op('contacts_people', id, 'create', { entity: id, display_name: 'Cleo Park', next_touch: '2030-01-15' });
+    const kd = rid();
+    expect((await op('contacts_key_dates', kd, 'create', { entity: id, kind: 'birthday', month: 6, day: 1, recurring: true, source: 'test' })).status).toBe(200);
+
+    const [birthday] = await agenda(`contacts:key_date:${kd}`);
+    expect(birthday).toMatchObject({ kind: 'date', title: 'Birthday: Cleo Park', all_day: true, source_app: 'contacts', person: id, deleted: false, version: 1 });
+    const [reach] = await agenda(`contacts:reach_out:${id}`);
+    expect(reach).toMatchObject({ kind: 'task', title: 'Reach out to Cleo Park', start: '2030-01-15', person: id });
+  });
+
+  it('projects EatWell intake into a daily core_glances card', async () => {
+    const date = '2030-02-03';
+    await op('eatwell_entries', rid(), 'create', { date, meal: 'breakfast', name: 'Oats', kcal: 300 });
+    await op('eatwell_water', rid(), 'create', { date, ml: 500 });
+    const res = await api(`/api/collections/core_glances/records?filter=${encodeURIComponent(`app_id="eatwell" && date="${date}"`)}`, { token: user });
+    expect(res.body.items).toHaveLength(1);
+    expect(res.body.items[0]).toMatchObject({ key: 'intake', value: 300, unit: 'kcal', detail: '500 ml water' });
+  });
+
+  it('core_agenda accepts items from apps through ops and rejects malformed times', async () => {
+    const ok = await op('core_agenda', rid(), 'create', { kind: 'focus', title: 'Deep work', start: '2030-03-01T09:00', end: '2030-03-01T10:30', source_app: 'shell', status: 'open' });
+    expect(ok.status).toBe(200);
+    const bad = await op('core_agenda', rid(), 'create', { kind: 'event', title: 'x', start: 'tomorrow', source_app: 'shell' });
+    expect(bad.status).toBe(400);
+  });
+});

@@ -107,7 +107,19 @@ export class SyncEngine {
     for (const [id, s] of this.subs) if (s.appId === appId) this.subs.delete(id);
   }
 
+  private watchers = new Map<string, Set<(ids: string[]) => void>>();
+
+  /** Shell screens (Today, Week) listen to collection changes the way apps do through data.changed. */
+  watch(collection: string, fn: (ids: string[]) => void): () => void {
+    let set = this.watchers.get(collection);
+    if (!set) this.watchers.set(collection, (set = new Set()));
+    set.add(fn);
+    void this.track(collection);
+    return () => set.delete(fn);
+  }
+
   private notify(collection: string, ids: string[]): void {
+    for (const fn of this.watchers.get(collection) ?? []) fn(ids);
     const seen = new Set<string>();
     for (const s of this.subs.values()) {
       if (s.collection !== collection || seen.has(s.appId)) continue;

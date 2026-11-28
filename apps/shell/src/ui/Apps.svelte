@@ -27,8 +27,8 @@
 </script>
 
 <header class="bar">
-  <h1>~Supra~</h1>
-  <button type="button" class="sync" data-testid="sync-status" data-state={$syncState.label} onclick={() => onNavigate('sync')} aria-label={`Sync status: ${syncLabel}. ${$syncState.detail} Open Sync centre.`}>
+  <h1>Apps</h1>
+  <button type="button" class="sync" data-state={$syncState.label} onclick={() => onNavigate('sync')} aria-label={`Sync status: ${syncLabel}. ${$syncState.detail} Open Sync centre.`}>
     <span class="dot" aria-hidden="true"></span>{syncLabel}
   </button>
 </header>
@@ -37,8 +37,7 @@
   <p class="banner" role="status">Safe mode is on. All subapps are disabled. Turn it off in Settings.</p>
 {/if}
 
-<section aria-labelledby="apps-heading" class="section">
-  <h2 id="apps-heading">Apps</h2>
+<section aria-label="Installed apps" class="section">
   {#if apps.length === 0}
     <p class="muted">No apps installed yet.</p>
   {:else}
@@ -82,11 +81,6 @@
   h1 {
     font-size: var(--font-size-lg);
     margin: 0;
-  }
-  h2 {
-    font-size: var(--font-size-md);
-    color: var(--color-text-muted);
-    margin: 0 0 var(--space-3);
   }
   .sync {
     display: flex;

@@ -8,9 +8,17 @@
   // `shell` is a constant composition root and is never reassigned.
   // svelte-ignore state_referenced_locally
   const shellState = shell.state;
+  // svelte-ignore state_referenced_locally
+  const todayHealth = shell.today.healthEnabled;
 
   async function changeTheme(e: Event) {
     await shell.setTheme((e.currentTarget as HTMLSelectElement).value as ShellState['theme']);
+  }
+
+  async function toggleTodayHealth(e: Event) {
+    const on = (e.currentTarget as HTMLInputElement).checked;
+    await shell.today.setHealthEnabled(on);
+    showToast(on ? 'Steps and active calories will show on Today.' : 'Health is no longer shown on Today.');
   }
 
   async function toggleSafeMode(e: Event) {
@@ -91,6 +99,14 @@
     <option value="light">Light</option>
     <option value="dark">Dark</option>
   </select>
+</section>
+
+<section class="section">
+  <div class="row">
+    <input id="today-health" type="checkbox" checked={$todayHealth} onchange={toggleTodayHealth} aria-describedby="today-health-note" />
+    <label for="today-health">Show steps and active calories on Today</label>
+  </div>
+  <p class="muted" id="today-health-note">Read live from Health Connect when Today opens; never stored, synced or logged. Needs the Android app and Health Connect access.</p>
 </section>
 
 <section class="section">

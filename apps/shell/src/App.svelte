@@ -2,7 +2,11 @@
   import { onMount } from 'svelte';
   import type { Shell } from './shell.ts';
   import Setup from './ui/Setup.svelte';
-  import Home from './ui/Home.svelte';
+  import Apps from './ui/Apps.svelte';
+  import Today from './ui/today/Today.svelte';
+  import Week from './ui/today/Week.svelte';
+  import QuickAdd from './ui/today/QuickAdd.svelte';
+  import { ymd } from './today/agenda.ts';
   import Diagnostics from './ui/Diagnostics.svelte';
   import Settings from './ui/Settings.svelte';
   import SyncCentre from './ui/SyncCentre.svelte';
@@ -12,8 +16,11 @@
 
   const { shell }: { shell: Shell } = $props();
 
-  type View = 'loading' | 'setup' | 'home' | 'app' | 'diagnostics' | 'settings' | 'sync';
+  type View = 'loading' | 'setup' | 'home' | 'week' | 'apps' | 'app' | 'diagnostics' | 'settings' | 'sync';
   let view = $state<View>('loading');
+  let selectedDay = $state(ymd(new Date()));
+  let adding = $state(false);
+  const tabbed = $derived(view === 'home' || view === 'week' || view === 'apps');
   let activeApp = $state<string | null>(null);
   let host: HTMLElement;
   // `shell` is a constant composition root and is never reassigned.
@@ -67,6 +74,7 @@
     void shell.broker
       .onBackButton(() => {
         if (shell.consent.get()) shell.decideConsent('dismiss');
+        else if (adding) adding = false;
         else if (view !== 'home') goHome();
       })
       .then((f) => (offBack = f));
@@ -101,7 +109,11 @@
     {:else if view === 'setup'}
       <Setup {shell} onDone={() => (view = 'home')} />
     {:else if view === 'home'}
-      <Home {shell} onOpen={open} onNavigate={(v) => (view = v)} />
+      <Today {shell} day={selectedDay} onDay={(d) => (selectedDay = d)} onOpen={open} onNavigate={(v) => (view = v)} onQuickAdd={() => (adding = true)} />
+    {:else if view === 'week'}
+      <Week {shell} day={selectedDay} onDay={(d) => (selectedDay = d)} onOpenDay={(d) => { selectedDay = d; view = 'home'; }} />
+    {:else if view === 'apps'}
+      <Apps {shell} onOpen={open} onNavigate={(v) => (view = v)} />
     {:else if view === 'sync'}
       <SyncCentre {shell} onBack={() => (view = 'home')} />
     {:else if view === 'diagnostics'}
@@ -112,11 +124,51 @@
   </main>
 
   <section class="host" bind:this={host} hidden={view !== 'app'} aria-label="Running app" data-testid="subapp-host"></section>
+  {#if tabbed}
+    <nav class="tabs" aria-label="Main">
+      <button type="button" aria-current={view === 'home' ? 'page' : undefined} onclick={() => { view = 'home'; }}>Today</button>
+      <button type="button" aria-current={view === 'week' ? 'page' : undefined} onclick={() => (view = 'week')}>Week</button>
+      <button type="button" class="add" aria-label="Add to agenda" data-testid="add-button" onclick={() => (adding = true)}>+</button>
+      <button type="button" aria-current={view === 'apps' ? 'page' : undefined} onclick={() => (view = 'apps')}>Apps</button>
+      <button type="button" onclick={() => (view = 'settings')}>Settings</button>
+    </nav>
+  {/if}
+  {#if adding}
+    <QuickAdd {shell} day={selectedDay} onClose={() => (adding = false)} />
+  {/if}
   <ConsentSheet {shell} />
   <Toasts />
 </div>
 
 <style>
+  .tabs {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    align-items: center;
+    height: var(--nav-height);
+    background: var(--color-surface);
+    border-top: 1px solid var(--color-border);
+  }
+  .tabs button {
+    min-height: var(--tap-target);
+    border: 0;
+    background: none;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+  }
+  .tabs button[aria-current='page'] {
+    color: var(--color-accent);
+    font-weight: 700;
+  }
+  .tabs .add {
+    justify-self: center;
+    width: var(--tap-target);
+    border-radius: 50%;
+    background: var(--color-accent);
+    color: var(--color-accent-text);
+    font-size: var(--font-size-xl);
+    line-height: 1;
+  }
   .shell {
     display: flex;
     flex-direction: column;

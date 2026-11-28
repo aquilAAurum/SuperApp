@@ -49,6 +49,8 @@ routerAdd(
       // Validation failures are answered as 400 inside applyOp. Anything thrown here (database busy,
       // I/O) rolled the transaction back and is transient: 500 lets the outbox retry with backoff.
       $app.logger().error("sa.ops.failed", "collection", String(op.collection || ""), "error", String(err));
+      // Also to stdout (CORE-14 JSON line), so service and CI logs show the cause.
+      console.log(JSON.stringify({ level: "error", msg: "sa.ops.failed", collection: String(op.collection || ""), op: String(op.op || ""), error: String(err).slice(0, 300) }));
       return e.json(500, { code: "SERVER_ERROR", message: "The server could not apply this change. It will be retried." });
     }
     return e.json(res.status, res.body);

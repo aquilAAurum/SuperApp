@@ -56,7 +56,8 @@ export async function mockPocketBase(page: Page): Promise<MockServer> {
     if (url.pathname === '/api/collections/users/auth-with-password') {
       const body = req.postDataJSON() as { identity: string; password: string };
       if (body.password !== 'correct-horse') return json(400, { status: 400, message: 'Failed to authenticate.', data: {} });
-      const exp = Math.floor(Date.now() / 1000) + 3600;
+      // Far-future expiry: tests may pin the page clock (page.clock.setFixedTime) past "now + 1 h".
+      const exp = Math.floor(Date.now() / 1000) + 10 * 365 * 24 * 3600;
       const token = `x.${Buffer.from(JSON.stringify({ exp, type: 'auth', collectionId: '_pb_users_auth_' })).toString('base64url')}.y`;
       return json(200, { token, record: { id: 'user00000000001', email: body.identity, name: 'Nick', collectionName: 'users', collectionId: '_pb_users_auth_' } });
     }

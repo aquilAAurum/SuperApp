@@ -24,6 +24,7 @@ import { DeferredKv, type KvBackend } from './sync/kv.ts';
 import { IndexedDbKv } from './sync/idb-kv.ts';
 import { SqliteKv } from './sync/sqlite-kv.ts';
 import { showToast } from './ui/store.ts';
+import { TodayService } from './today/service.ts';
 
 export const SHELL_VERSION = __SHELL_VERSION__;
 
@@ -78,6 +79,8 @@ export class Shell {
 
   private readonly handlers: Partial<Record<MethodName, Handler>>;
   readonly sync: SyncEngine;
+  /** Today home (SA-2026-009): agenda, glances, focus. */
+  readonly today: TodayService;
   private realtime = new Map<string, () => Promise<void>>();
   readonly router: BridgeRouter;
   readonly handshake: HandshakeGuard;
@@ -121,6 +124,14 @@ export class Shell {
       emit: (appId, topic, payload) => void this.router.emit(appId, topic, payload),
       deviceId: () => this.state.get().deviceId,
       onAuthError: () => void this.recoverAuth(),
+    });
+    this.today = new TodayService({
+      sync: this.sync,
+      health: this.broker.health,
+      isNative: () => this.broker.isNative,
+      getPref: (k) => this.broker.getPref(k),
+      setPref: (k, v) => this.broker.setPref(k, v),
+      logger: log,
     });
     Object.assign(this.handlers, dataHandlers(this.sync), deviceHandlers(this.broker.devicePort(), log));
     this.router = new BridgeRouter({
