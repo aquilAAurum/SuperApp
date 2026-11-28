@@ -1,7 +1,7 @@
 ---
 id: ADR-011
 title: Today home built on shared core_agenda and core_glances collections
-status: Proposed
+status: Accepted
 date: 2026-11-28
 decided_by: nick
 supersedes: []
@@ -32,4 +32,4 @@ Nick asked for the launcher to become a unified view centred on the calendar/age
 
 ## 4. Approval
 
-Adds core collections and a new place where health data is displayed, so it needs Nick's approval.
+Adds core collections and a new place where health data is displayed, so it needed Nick's approval. **Accepted by Nick 2026-11-28.**

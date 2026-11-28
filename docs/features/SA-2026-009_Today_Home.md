@@ -55,7 +55,7 @@ Today from mirror < 300 ms; WCAG 2.1 AA (axe on Today, quick add, Week); touch t
 | :-- | :-- | :-- |
 | Risk | Server projections only verified by CI integration tests until deployed to the mini PC | Theo |
 | Assumption | Mini PC local time zone = owner's (key dates roll at local midnight) | Theo |
-| Decision needed | Health on Today (ADR-011 §5) and the new core collections | Nick |
+| Decision | Health on Today (ADR-011 §5) and the new core collections: accepted by Nick 2026-11-28 | Nick |
 
 ## 8. Release & Operations
 Deploy server (`tools/deploy-server.ps1`) before installing the APK, so projections exist. Rollback: previous APK + previous server bundle; the new collections are additive.
