@@ -2,7 +2,7 @@
 
 - **Feature ID:** SA-2026-009
 - **Doc ID:** D02 (PRD)   · **Producer:** Qz   · **Consumers:** Jane, Jules, Priya, Kumi Wai, Russ, Theo
-- **Version:** 0.3   · **Status:** Proposal (scoping; O-1 to O-7 decided by Nick 2026-11-28; O-8 open; no code)   · **Date:** 2026-11-28
+- **Version:** 0.4   · **Status:** Proposal (scoping; O-1 to O-7 decided by Nick 2026-11-28; O-8 deferred until a station is bought; no code)   · **Date:** 2026-11-28
 - **Owner(s):** Qz (content), Nick (approval)   · **T-Shirt Size:** L (four releases, §9)
 - **Subapp id:** `weather` (collections `weather_*`, events `weather.*`, deep links `superapp://weather/...`)
 - **Depends on:** SA-2026-003 (data and sync), SA-2026-004 (M4: `device.location`, `notify.post`), SA-2026-005 (M5: bus, inbox, deep links), the M6 server-proxy pattern, and an **agenda** (SA-2026-010, proposed in §7; none exists yet).
@@ -105,7 +105,7 @@ All free/public; terms and attribution confirmed in spike S-1 before build. Prim
 | Discussion (optional) | `/products?type=AFD&location={wfo}` | Forecaster reasoning; shown collapsed for "why". |
 | Official observations | `/stations/{id}/observations/latest` (ASOS/AWOS near each place) | Truth for "now" and pressure trend. |
 | Public weather stations | **MADIS** (includes CWOP citizen stations, mesonets) and **Synoptic** public data, if their terms allow | Hyper-local temperature, wind and rain rate; quality-filtered (§4.3). Weather Underground PWS API is excluded (requires a contributing station and limits reuse). |
-| **Owner's weather station** (O-7, confirmed) | Read by the mini PC from the station's local API on the LAN, or from Home Assistant once it runs on the mini PC (M6); a vendor cloud key, if one is needed, lives in `core_integrations` and never reaches the phone. Brand and connection in O-8. | **First source for "now" at the station's location** (temperature, humidity, wind/gusts, rain rate and daily total, pressure trend). Rain rate > 0 at the station confirms a nowcast start; its pressure trend feeds §6.2. |
+| **Owner's weather station** (later, R5; O-7: none owned yet) | Read by the mini PC from the station's local API on the LAN, or from Home Assistant once it runs on the mini PC (M6); a vendor cloud key, if one is needed, lives in `core_integrations` and never reaches the phone. Brand and connection in O-8. | **First source for "now" at the station's location** (temperature, humidity, wind/gusts, rain rate and daily total, pressure trend). Rain rate > 0 at the station confirms a nowcast start; its pressure trend feeds §6.2. |
 | Air quality | AirNow API (EPA; free key held in `core_integrations`) | AQI + pollutant, forecast. |
 | UV | EPA UV index forecast (Envirofacts) | Hourly UV by ZIP/city. |
 | Fallback / outside the US | Open-Meteo (no key) | Used only when NWS is down or the place is outside NWS coverage; labelled. |
@@ -124,7 +124,7 @@ Map: MapLibre GL or Leaflet bundled inside the single-file subapp, with a lightw
 
 ### 4.3 Station quality
 
-Citizen stations are noisy. A station is used only if: reported in the last 30 min; within 10 km and 150 m elevation of the place; passes MADIS QC flags; and is within a plausibility band of the nearest ASOS and NWS grid (e.g. ±8 °F). Outliers are dropped and listed in Diagnostics, not shown. The owner's station skips the distance rule but keeps the staleness and plausibility checks; when it fails them the app says "Your station: no recent data" and falls back to public stations.
+Citizen stations are noisy. A station is used only if: reported in the last 30 min; within 10 km and 150 m elevation of the place; passes MADIS QC flags; and is within a plausibility band of the nearest ASOS and NWS grid (e.g. ±8 °F). Outliers are dropped and listed in Diagnostics, not shown. Later (R5), the owner's station skips the distance rule but keeps the staleness and plausibility checks; when it fails them the app says "Your station: no recent data" and falls back to public stations.
 
 ### 4.4 Sky
 
@@ -237,10 +237,11 @@ All synced (version, soft delete, owner-only rules). Server-derived collections 
 
 | Release | Scope | Needs |
 | :-- | :-- | :-- |
-| **R1 — Forecast and warnings** | Server NWS fetch/cache, places, Home (changes first, now, hourly 48 h, 7-day with rain/snow amounts), NWS alerts with notifications, station "now" with QC (owner's station first, O-8), comfort (feels-like, dew point, UV, AQI), **7 pm brief** and week-outlook change detection (§6.3). | M3 (done-ish), M4 `notify.post`, `device.location`, ntfy push |
+| **R1 — Forecast and warnings** | Server NWS fetch/cache, places, Home (changes first, now, hourly 48 h, 7-day with rain/snow amounts), NWS alerts with notifications, station "now" with QC, comfort (feels-like, dew point, UV, AQI), **7 pm brief** and week-outlook change detection (§6.3). | M3 (done-ish), M4 `notify.post`, `device.location`, ntfy push |
 | **R2 — Radar** | Animated past radar + HRRR future radar, precip type, alert polygons, map with place pins; nowcast "starts in N min" (§6.2). | `weather.*` bridge methods, spike S-2 |
 | **R3 — Sky** | Aurora (Kp, OVATION, storm alerts), moon/sun/twilight, meteor showers, eclipses, planets, ISS passes, viewing score, "Tonight's sky" in the brief and push for *good* aurora nights. | — |
 | **R4 — Agenda guard** | Conflict engine, badges in the agenda view, conflict notifications, route sampling for drives. | SA-2026-010 Agenda (Google Calendar sync, `core_agenda_events`), M5 bus |
+| R5 — Own station (later) | Owner's weather station as the first source for "now" (§4.1, §4.3), once one is bought. Nothing in R1–R4 depends on it; station readings plug into the existing observation pipeline. | A station (O-8) |
 
 Out of scope: horoscope astrology (O-1), email delivery (O-5; push only), metric units (O-4), pollen (no NOAA source), marine/aviation products, ads, social features, AI chat about weather (could reuse `ai.chat` later to summarise the forecast discussion).
 
@@ -279,5 +280,5 @@ Out of scope: horoscope astrology (O-1), email delivery (O-5; push only), metric
 | O-4 | Units? | **Decided (Nick, 2026-11-28): °F** (with mph and inches); no metric switch in R1. |
 | O-5 | Email the brief as well? | **Decided (Nick, 2026-11-28): no email; push notifications only.** |
 | O-6 | Is ntfy push (spec §Push) acceptable to run on the mini PC for overnight warnings? | **Decided (Nick, 2026-11-28): yes.** Self-hosted ntfy on the mini PC; R1 depends on it. |
-| O-7 | Include the owner's own weather station? | **Decided (Nick, 2026-11-28): yes** (§4.1, §4.3). |
-| O-8 | Station brand/model, and does it have a local LAN API (Ecowitt, Tempest UDP, Davis WeatherLink Live, Ambient local) or only a vendor cloud? | Local LAN API read by the mini PC (no cloud key, works offline); Home Assistant later. |
+| O-7 | Include the owner's own weather station? | **Decided (Nick, 2026-11-28): later add.** No station owned yet; planned as R5. |
+| O-8 | Which station to buy (deferred to R5)? | Prefer one with a local LAN API (e.g. Ecowitt, Tempest UDP, Davis WeatherLink Live) so the mini PC reads it directly with no cloud key and it keeps working offline. |
