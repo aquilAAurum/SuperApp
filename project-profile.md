@@ -27,7 +27,7 @@ Everything product-specific lives here; Core personas read these values. A Profi
 | SA-C5 | **Server is truth.** PocketBase (pinned version, `tools/pocketbase-ci.sh`) holds canonical data; the phone holds a cache + outbox only. Synced collections are written only through `POST /api/sa/ops` (baseVersion + opId idempotency). | Spec §Data layer, §Sync |
 | SA-C6 | Network: server reachable only via Tailscale/LAN; the phone uses **Tailscale Serve HTTPS**. The APK has cleartext disabled; LAN `http://` addresses are dev/browser only. | Spec §Security; [ADR-003](docs/adr/ADR-003_Subapp_Isolation_Srcdoc_CSP.md) §Consequences |
 | SA-C7 | **Device-agnostic contracts:** no API assumes a phone; form factor and capabilities come from `sys.capabilities` and `core_devices`. `car` and `background` manifest blocks stay null/empty in v1. | Spec §Scope |
-| SA-C8 | Android permissions: **declare only v1 permissions, each with its feature** (Step 0 checks every `<uses-permission>` against an allow-list). Health Connect's 13 `health.*` permissions are added with EatWell ([ADR-010](docs/adr/ADR-010_Health_Connect_Capability.md), Proposed) and must match `packages/contracts/src/health.ts`. | Spec §Permissions rules; ADR-010 |
+| SA-C8 | Android permissions: **declare only v1 permissions, each with its feature** (Step 0 checks every `<uses-permission>` against an allow-list). Health Connect's 13 `health.*` permissions are added with EatWell ([ADR-010](docs/adr/ADR-010_Health_Connect_Capability.md), accepted by Nick 2026-11-28) and must match `packages/contracts/src/health.ts`. | Spec §Permissions rules; ADR-010 |
 
 ## 3. UX Constraints
 

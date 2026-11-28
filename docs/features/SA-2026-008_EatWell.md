@@ -2,10 +2,10 @@
 
 - **Feature ID:** SA-2026-008
 - **Doc ID:** D02 (PRD)   · **Producer:** Qz   · **Consumers:** Jane, Jules, Priya, Kumi Wai, Russ
-- **Version:** 0.1   · **Status:** Proposal (for Nick's approval; R1 built in `subapps/eatwell`, state `3_BUILD`; Health Connect bridge per ADR-010, Proposed)   · **Date:** 2026-11-28
+- **Version:** 0.1   · **Status:** Proposal (for Nick's approval; R1 built in `subapps/eatwell`, state `3_BUILD`; Health Connect bridge per ADR-010, Accepted 2026-11-28)   · **Date:** 2026-11-28
 - **Owner(s):** Qz (content), Nick (approval)
 - **Subapp ids:** `eatwell` (R1, built). Planned: `mealplan` (R3).
-- **Depends on:** SA-2026-003 (data and sync), ADR-010 (Health Connect, consent sheet). R2 depends on M4 camera/files and an M6 server proxy.
+- **Depends on:** SA-2026-003 (data and sync), ADR-010 (Health Connect, consent sheet; Accepted). R2 depends on M4 camera/files and an M6 server proxy.
 
 ## 1. Problem and goal
 

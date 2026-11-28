@@ -1,7 +1,7 @@
 ---
 id: ADR-010
 title: Health Connect as a v1 capability (device.health.read / device.health.write), with a shell consent sheet
-status: Proposed
+status: Accepted
 date: 2026-11-28
 decided_by: nick
 supersedes: []
@@ -37,4 +37,4 @@ Consent-gated scopes also had no consent UI yet (M4): the router answered `SCOPE
 
 ## 4. Approval
 
-Changes the spec's capability map (Later → v1) and adds Android permissions, so it needs Nick's approval before merge (project-profile: a Profile may not relax a rule without an ADR approved by Nick).
+Changes the spec's capability map (Later → v1) and adds Android permissions, so it needed Nick's approval (project-profile: a Profile may not relax a rule without an ADR approved by Nick). **Accepted by Nick 2026-11-28.**
