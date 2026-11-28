@@ -90,3 +90,16 @@ test.describe('Today home (SA-2026-009)', () => {
     expect(await scan()).toEqual([]);
   });
 });
+
+test('health on Today is off by default and can be switched on in Settings', async ({ page, server }) => {
+  void server;
+  await signIn(page);
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const toggle = page.getByLabel('Show steps and active calories on Today');
+  await expect(toggle).not.toBeChecked();
+  await toggle.check();
+  await expect(page.getByText('Steps and active calories will show on Today.')).toBeVisible();
+  // The browser build has no Health Connect: nothing is read and no Activity card appears.
+  await page.getByRole('button', { name: 'Back to launcher' }).click();
+  await expect(page.getByText('Activity')).toHaveCount(0);
+});
