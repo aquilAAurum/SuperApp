@@ -1,6 +1,6 @@
 {
   "name": "@superapp/subapp-eatwell",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "EatWell: food diary with a daily calorie budget, macros, water and weight, plus activity from Health Connect (SA-2026-008).",
   "license": "UNLICENSED",

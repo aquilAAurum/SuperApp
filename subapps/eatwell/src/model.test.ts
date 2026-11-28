@@ -20,6 +20,8 @@ import {
   recentFoods,
   scale,
   searchFoods,
+  stem,
+  isByWeight,
   settingsOf,
   validateFood,
   weightOn,
@@ -137,6 +139,29 @@ describe('foods', () => {
     expect(searchFoods(items, 'chick bre')[0]!.name).toBe('Chicken breast, roasted, skinless');
     expect(searchFoods(items, 'ban')[0]).toMatchObject({ name: 'Banana', favorite: true });
     expect(searchFoods(items, '')).toEqual([]);
+  });
+
+  it('finds plurals, brands and reference-database foods', () => {
+    expect(['eggs', 'potatoes', 'berries', 'oats', 'glass', 'fries'].map(stem)).toEqual(['egg', 'potato', 'berry', 'oat', 'glass', 'fry']);
+    const items = catalog(raw());
+    expect(items.length).toBeGreaterThan(6000);
+    for (const q of ['eggs', 'bananas', 'potatoes', 'tomatoes', 'apples', 'chobani', 'cheerios', 'big mac', 'greek yogurt', 'brown rice']) {
+      expect(searchFoods(items, q).length, q).toBeGreaterThan(0);
+    }
+    // Curated foods with real servings rank above per-100 g reference rows.
+    expect(searchFoods(items, 'eggs')[0]).toMatchObject({ source: 'builtin' });
+    const chobani = searchFoods(items, 'chobani')[0]!;
+    expect(chobani).toMatchObject({ source: 'db', serving_label: '100 g' });
+    expect(isByWeight(chobani)).toBe(true);
+    expect(chobani.ref).toMatch(/^u:[a-z0-9]+$/);
+  });
+
+  it('search over the whole catalog stays fast', () => {
+    const items = catalog(raw());
+    searchFoods(items, 'warm');
+    const t = performance.now();
+    for (const q of ['c', 'ch', 'chi', 'chic', 'chick', 'chicken', 'chicken b', 'chicken br']) searchFoods(catalog(raw()), q);
+    expect(performance.now() - t).toBeLessThan(400);
   });
 
   it('validates an own food', () => {

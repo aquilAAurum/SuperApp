@@ -7,6 +7,7 @@ import { connect, BridgeError } from '@superapp/sdk';
 import { bars, line, ring } from './charts.ts';
 import { watchAll } from './data.ts';
 import { BUILTIN_BY_REF } from './foods.ts';
+import { FOODDB_ATTRIBUTION } from './fooddb.ts';
 import { Health, type DayActivity } from './health.ts';
 import {
   ACTIVITY_LABEL,
@@ -24,6 +25,7 @@ import {
   favoriteRefs,
   favorites,
   fmtNum,
+  isByWeight,
   fmtWater,
   fmtWeight,
   goalEta,
@@ -101,7 +103,8 @@ function errorText(err: unknown): string {
 type Tab = 'today' | 'trends' | 'foods' | 'goals';
 type Sheet =
   | { kind: 'add'; meal: Meal; list: 'recent' | 'favorites' | 'mine'; query: string }
-  | { kind: 'serving'; food: Loggable; meal: Meal; servings: string; entry?: Entry }
+  /** `servings` is a serving count, or for by-weight foods (per 100 g) an amount in `unit`. */
+  | { kind: 'serving'; food: Loggable; meal: Meal; servings: string; unit?: 'g' | 'oz'; entry?: Entry }
   | { kind: 'quick'; meal: Meal }
   | { kind: 'food'; food?: OwnFood; draft: FoodDraft; errors: Partial<Record<keyof FoodDraft, string>>; thenLog?: Meal }
   | { kind: 'weight' };
@@ -172,7 +175,7 @@ async function toggleFavorite(f: Loggable): Promise<void> {
   if (f.source === 'own') {
     const own = raw.foods.find((x) => x.id === f.ref);
     if (own) await save(COLLECTIONS.foods, { favorite: !own.favorite }, own);
-  } else if (f.ref.startsWith('b:')) {
+  } else if (f.ref.startsWith('b:') || f.ref.startsWith('u:')) {
     const row = favoriteRefs(raw).get(f.ref);
     if (row) await save(COLLECTIONS.foods, { favorite: !row.favorite }, row);
     else await save(COLLECTIONS.foods, { name: f.name, builtin_ref: f.ref, favorite: true });
@@ -350,7 +353,7 @@ function mealCard(meal: Meal, kcal: number, entries: Entry[]): HTMLElement {
         h(
           'button',
           { type: 'button', class: 'entry', 'data-testid': 'entry', onclick: () => editEntry(e) },
-          h('span', { class: 'entry-main' }, h('span', { class: 'entry-name' }, e.name), h('span', { class: 'muted small' }, [e.brand, e.servings && e.servings !== 1 ? `${e.servings} × ${e.serving_label ?? 'serving'}` : e.serving_label].filter(Boolean).join(' · '))),
+          h('span', { class: 'entry-main' }, h('span', { class: 'entry-name' }, e.name), h('span', { class: 'muted small' }, [e.brand, isByWeight(e) ? fmtAmount((e.servings ?? 1) * 100) : e.servings && e.servings !== 1 ? `${e.servings} × ${e.serving_label ?? 'serving'}` : e.serving_label].filter(Boolean).join(' · '))),
           h('span', { class: 'entry-kcal' }, fmtNum(e.kcal ?? 0)),
         ),
       ),
@@ -368,7 +371,8 @@ function editEntry(e: Entry): void {
   const per = perServing(e);
   const builtin = e.food_ref ? BUILTIN_BY_REF.get(e.food_ref) : undefined;
   const food: Loggable = { ref: e.food_ref ?? '', name: e.name, brand: e.brand, serving_label: e.serving_label || builtin?.serving || '1 serving', source: 'recent', favorite: false, ...per };
-  openSheet({ kind: 'serving', food, meal: e.meal, servings: String(e.servings ?? 1), entry: e });
+  if (isByWeight(food)) openSheet({ kind: 'serving', food, meal: e.meal, servings: String(round((e.servings ?? 1) * 100)), unit: 'g', entry: e });
+  else openSheet({ kind: 'serving', food, meal: e.meal, servings: String(e.servings ?? 1), entry: e });
 }
 
 // ------------------------------------------------------------------ Add food sheet
@@ -389,7 +393,7 @@ function foodRow(f: Loggable, onPick: () => void): HTMLElement {
     h(
       'button',
       { type: 'button', class: 'food-pick', 'data-testid': 'food-result', onclick: onPick },
-      h('span', { class: 'entry-main' }, h('span', { class: 'entry-name' }, f.name), h('span', { class: 'muted small' }, [f.brand, f.serving_label].filter(Boolean).join(' · '))),
+      h('span', { class: 'entry-main' }, h('span', { class: 'entry-name' }, f.name), h('span', { class: 'muted small' }, [f.brand, isByWeight(f) ? 'per 100 g' : f.serving_label].filter(Boolean).join(' · '))),
       gentle ? h('span', { class: 'chip', title: 'Gentle choice' }, 'Gentle') : null,
       h('span', { class: 'entry-kcal' }, fmtNum(f.kcal)),
     ),
@@ -407,7 +411,7 @@ function addSheet(s: Extract<Sheet, { kind: 'add' }>): HTMLElement {
     if (s.query.trim()) {
       const found = searchFoods(catalog(raw), s.query);
       items = settings().gentle_mode ? [...found.filter((f) => f.gentle), ...found.filter((f) => !f.gentle)] : found;
-      empty = 'No match. Create it as your own food, or quick add calories.';
+      empty = `Nothing matches "${s.query.trim()}". Try a simpler word (e.g. "yogurt"), create it as your own food, or quick add calories.`;
     } else if (s.list === 'recent') {
       items = recentFoods(raw);
       empty = 'Foods you log show up here.';
@@ -418,7 +422,7 @@ function addSheet(s: Extract<Sheet, { kind: 'add' }>): HTMLElement {
       items = catalog(raw).filter((f) => f.source === 'own');
       empty = 'Foods you create show up here.';
     }
-    results.replaceChildren(...(items.length ? items.map((f) => foodRow(f, () => openSheet({ kind: 'serving', food: f, meal: s.meal, servings: '1' }))) : [h('li', { class: 'empty muted' }, empty)]));
+    results.replaceChildren(...(items.length ? items.map((f) => foodRow(f, () => openServing(f, s.meal))) : [h('li', { class: 'empty muted', 'data-testid': 'food-empty' }, empty)]));
   };
   const input = h('input', {
     id: 'food-search',
@@ -449,26 +453,47 @@ function addSheet(s: Extract<Sheet, { kind: 'add' }>): HTMLElement {
   );
 }
 
+function openServing(food: Loggable, meal: Meal): void {
+  if (isByWeight(food)) {
+    const oz = units() === 'imperial';
+    openSheet({ kind: 'serving', food, meal, servings: oz ? '4' : '100', unit: oz ? 'oz' : 'g' });
+  } else openSheet({ kind: 'serving', food, meal, servings: '1' });
+}
+
+const G_PER_OZ = 28.3495;
+const fmtAmount = (grams: number) => (units() === 'imperial' ? `${round(grams / G_PER_OZ, 1)} oz (${Math.round(grams)} g)` : `${Math.round(grams)} g`);
+
+/** Serving count to store: plain servings, or grams / 100 for by-weight foods. */
+function servingsOf(s: Extract<Sheet, { kind: 'serving' }>): number | null {
+  if (!isByWeight(s.food)) return parseServings(s.servings);
+  const v = Number(s.servings.replace(',', '.'));
+  const grams = s.unit === 'oz' ? v * G_PER_OZ : v;
+  if (!Number.isFinite(grams) || grams <= 0 || grams > 5000) return null;
+  return round(grams / 100, 3);
+}
+
 function servingSheet(s: Extract<Sheet, { kind: 'serving' }>): HTMLElement {
+  const byWeight = isByWeight(s.food);
   const totals = h('p', { class: 'totals', 'data-testid': 'serving-totals', 'aria-live': 'polite' });
   const err = h('p', { class: 'error', role: 'alert' });
   const showTotals = () => {
-    const n = parseServings(s.servings);
+    const n = servingsOf(s);
     if (n === null) {
       totals.textContent = '';
-      err.textContent = 'Enter servings between 0.01 and 100.';
+      err.textContent = byWeight ? 'Enter an amount up to 5 kg (176 oz).' : 'Enter servings between 0.01 and 100.';
       return;
     }
     err.textContent = '';
     const x = scale(s.food, n);
     totals.replaceChildren(h('b', null, `${fmtNum(x.kcal)} cal`), ` · Protein ${round(x.protein_g ?? 0, 1)} g · Carbs ${round(x.carbs_g ?? 0, 1)} g · Fat ${round(x.fat_g ?? 0, 1)} g`);
   };
+  const step = byWeight ? (s.unit === 'oz' ? 1 : 25) : 0.25;
   const input = h('input', {
     id: 'servings',
     type: 'number',
     inputMode: 'decimal',
-    min: '0.25',
-    step: '0.25',
+    min: String(step),
+    step: 'any',
     value: s.servings,
     oninput: (ev: Event) => {
       s.servings = (ev.currentTarget as HTMLInputElement).value;
@@ -476,26 +501,50 @@ function servingSheet(s: Extract<Sheet, { kind: 'serving' }>): HTMLElement {
     },
   });
   const bump = (d: number) => {
-    const v = Math.max(0.25, round((parseServings(s.servings) ?? 1) + d, 2));
+    const v = Math.max(step, round((Number(s.servings.replace(',', '.')) || 0) + d, 2));
     s.servings = String(v);
     input.value = s.servings;
     showTotals();
   };
   showTotals();
   const submit = () => {
-    const n = parseServings(s.servings);
+    const n = servingsOf(s);
     if (n === null) return showTotals();
     run(
       addEntry(s.food, s.meal, n, s.entry).then(() => closeSheet(true)),
       s.entry ? 'Saved' : `Added to ${MEAL_LABEL[s.meal]}`,
     );
   };
+  const unitSelect = byWeight
+    ? h(
+        'select',
+        {
+          id: 'serving-unit',
+          'aria-label': 'Unit',
+          class: 'unit',
+          onchange: (ev: Event) => {
+            const next = (ev.currentTarget as HTMLSelectElement).value as 'g' | 'oz';
+            const v = Number(s.servings.replace(',', '.')) || 0;
+            s.servings = String(next === s.unit ? v : next === 'oz' ? round(v / G_PER_OZ, 1) : Math.round(v * G_PER_OZ));
+            s.unit = next;
+            render();
+          },
+        },
+        h('option', { value: 'g', selected: s.unit !== 'oz' }, 'g'),
+        h('option', { value: 'oz', selected: s.unit === 'oz' }, 'oz'),
+      )
+    : null;
   return h(
     'div',
     { class: 'sheet', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'sheet-title' },
     sheetHeader(s.entry ? 'Edit entry' : s.food.name),
-    h('p', { class: 'muted' }, [s.food.brand, `Serving: ${s.food.serving_label}`].filter(Boolean).join(' · ')),
-    h('div', { class: 'row' }, h('label', { for: 'servings' }, 'Servings'), h('div', { class: 'stepper' }, btn('−', () => bump(-0.25), 'icon', { 'aria-label': 'Fewer servings' }), input, btn('+', () => bump(0.25), 'icon', { 'aria-label': 'More servings' }))),
+    h('p', { class: 'muted' }, byWeight ? `${fmtNum(s.food.kcal)} cal per 100 g` : [s.food.brand, `Serving: ${s.food.serving_label}`].filter(Boolean).join(' · ')),
+    h(
+      'div',
+      { class: 'row' },
+      h('label', { for: 'servings' }, byWeight ? 'Amount' : 'Servings'),
+      h('div', { class: 'stepper' }, btn('−', () => bump(-step), 'icon', { 'aria-label': byWeight ? 'Less' : 'Fewer servings' }), input, unitSelect, btn('+', () => bump(step), 'icon', { 'aria-label': byWeight ? 'More' : 'More servings' })),
+    ),
     h('div', { class: 'row' }, h('label', { for: 'serving-meal' }, 'Meal'), mealSelect(s.meal, (m) => (s.meal = m), 'serving-meal')),
     h('p', { class: 'muted small' }, dayLabel(s.entry?.date ?? date, localToday())),
     totals,
@@ -738,8 +787,9 @@ function foodsView(): HTMLElement {
       'section',
       { class: 'card', 'aria-labelledby': 'fav-h' },
       h('h2', { id: 'fav-h' }, 'Favorites'),
-      favs.length ? h('ul', { class: 'foods' }, ...favs.map((f) => foodRow(f, () => openSheet({ kind: 'serving', food: f, meal, servings: '1' })))) : h('p', { class: 'muted' }, 'Tap ☆ next to any food to keep it here.'),
+      favs.length ? h('ul', { class: 'foods' }, ...favs.map((f) => foodRow(f, () => openServing(f, meal)))) : h('p', { class: 'muted' }, 'Tap ☆ next to any food to keep it here.'),
     ),
+    h('p', { class: 'muted small', 'data-testid': 'fooddb-attribution' }, FOODDB_ATTRIBUTION),
   );
 }
 
