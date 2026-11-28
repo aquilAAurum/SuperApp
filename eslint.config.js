@@ -90,7 +90,7 @@ export default tseslint.config(
     files: ['server/pb_hooks/**/*.js', 'server/pb_migrations/**/*.js'],
     languageOptions: {
       sourceType: 'script',
-      globals: { migrate: 'readonly', Collection: 'readonly', Record: 'readonly', routerAdd: 'readonly', onRecordUpdate: 'readonly', onRecordCreate: 'readonly', onRecordAfterCreateSuccess: 'readonly', onRecordAfterUpdateSuccess: 'readonly', onRecordUpdateRequest: 'readonly', onRecordCreateRequest: 'readonly', cronAdd: 'readonly', $app: 'readonly', $apis: 'readonly', $security: 'readonly', $os: 'readonly', $filesystem: 'readonly', __hooks: 'readonly', DynamicModel: 'readonly', BadRequestError: 'readonly', NotFoundError: 'readonly', ForbiddenError: 'readonly', ApiError: 'readonly', module: 'writable', require: 'readonly', toString: 'readonly' },
+      globals: { migrate: 'readonly', Collection: 'readonly', Record: 'readonly', routerAdd: 'readonly', onRecordUpdate: 'readonly', onRecordCreate: 'readonly', onRecordAfterCreateSuccess: 'readonly', onRecordAfterUpdateSuccess: 'readonly', onRecordUpdateRequest: 'readonly', onRecordCreateRequest: 'readonly', cronAdd: 'readonly', onServe: 'readonly', $app: 'readonly', $apis: 'readonly', $security: 'readonly', $os: 'readonly', $filesystem: 'readonly', __hooks: 'readonly', DynamicModel: 'readonly', BadRequestError: 'readonly', NotFoundError: 'readonly', ForbiddenError: 'readonly', ApiError: 'readonly', module: 'writable', require: 'readonly', toString: 'readonly' },
     },
     rules: { '@typescript-eslint/no-require-imports': 'off', '@typescript-eslint/triple-slash-reference': 'off' },
   },

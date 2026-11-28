@@ -58,10 +58,11 @@ Today from mirror < 300 ms; WCAG 2.1 AA (axe on Today, quick add, Week); touch t
 | Decision | Health on Today (ADR-011 §5) and the new core collections: accepted by Nick 2026-11-28 | Nick |
 
 ## 8. Release & Operations
-Deploy server (`tools/deploy-server.ps1`) before installing the APK, so projections exist. Rollback: previous APK + previous server bundle; the new collections are additive.
+Deploy server (`tools/deploy-server.ps1`) before installing the APK, so projections exist. Rollback: previous APK + previous server bundle; the new collections are additive. Projections are rebuilt from source data at every server start, nightly, and via superuser `POST /api/sa/agenda/rebuild`, so data that predates the deploy appears without being edited (found on device 2026-11-28: Today was empty until then).
 
 ## 10. Governance
 Sign-off: Qz, Anansi, Jane, Mara, Russ, Priya, Nick.
 
 ## Appendix: Change Log
 - 1.0 (2026-11-28): initial, from Nick's mockups.
+- 1.1 (2026-11-28): full rebuild of projections (startup, nightly, superuser endpoint); "free for the rest of the day" shown only when something is timed.
