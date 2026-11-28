@@ -1,20 +1,33 @@
 /*
- * Design tokens v1.0.0 (CORE-21). All shell styling uses these custom properties; hard-coded
+ * Design tokens v1.1.0 (CORE-21; v1.1 adds the Today palette, SA-2026-009). All shell styling uses these custom properties; hard-coded
  * values are prohibited outside this file. Named by role, not appearance.
  */
 :root {
-  --color-bg: #f6f7f9;
+  --color-bg: #eef2ef;
   --color-surface: #ffffff;
-  --color-surface-raised: #eef0f4;
-  --color-text: #15181e;
-  --color-text-muted: #5a6270;
-  --color-border: #d5d9e0;
-  --color-accent: #2952cc;
+  --color-surface-raised: #e6ede8;
+  --color-text: #14201a;
+  --color-text-muted: #55625b;
+  --color-border: #d3ddd6;
+  --color-accent: #1f7a43;
   --color-accent-text: #ffffff;
+  --color-accent-soft: #e1f2e7;
   --color-danger: #b3261e;
   --color-success: #1e7a3d;
   --color-warning: #8a5a00;
-  --color-focus: #2952cc;
+  --color-focus: #1f5fbf;
+  /* Agenda kinds (Today, Week): text-safe on surface; soft variants are backgrounds. */
+  --color-kind-event: #1f5fbf;
+  --color-kind-event-soft: #e3ecfa;
+  --color-kind-task: #8a5a00;
+  --color-kind-task-soft: #fbf0db;
+  --color-kind-focus: #1f7a43;
+  --color-kind-focus-soft: #e1f2e7;
+  --color-kind-date: #a0306f;
+  --color-kind-date-soft: #f8e4ef;
+  --color-kind-reminder: #5b4bb7;
+  --color-kind-reminder-soft: #ece8fa;
+  --color-now: #c0362c;
 
   --space-1: 4px;
   --space-2: 8px;
@@ -40,6 +53,9 @@
   --tile-size: 88px;
   --motion-duration: 0.2s;
   --shadow-raised: 0 1px 3px rgb(0 0 0 / 0.12);
+  --shadow-card: 0 1px 2px rgb(16 40 24 / 0.08), 0 2px 8px rgb(16 40 24 / 0.06);
+  --radius-xl: 22px;
+  --nav-height: 64px;
 
   /* System bar insets (Android edge-to-edge, viewport-fit=cover; Capacitor SystemBars). 0 in browsers. */
   --inset-top: env(safe-area-inset-top, 0px);
@@ -50,34 +66,58 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --color-bg: #101216;
-    --color-surface: #191c22;
-    --color-surface-raised: #232730;
-    --color-text: #eceef2;
-    --color-text-muted: #a3aab6;
-    --color-border: #343944;
-    --color-accent: #8fa8ff;
-    --color-accent-text: #0b1330;
+    --color-bg: #0f1412;
+    --color-surface: #18201c;
+    --color-surface-raised: #222c27;
+    --color-text: #e8efea;
+    --color-text-muted: #a3b2a9;
+    --color-border: #33403a;
+    --color-accent: #7fd6a2;
+    --color-accent-text: #0b2416;
+    --color-accent-soft: #1d3527;
     --color-danger: #ffb4ab;
     --color-success: #7dd99a;
     --color-warning: #f2c46b;
-    --color-focus: #8fa8ff;
+    --color-focus: #8fb4ff;
+    --color-kind-event: #9dbcff;
+    --color-kind-event-soft: #1c2a44;
+    --color-kind-task: #f2c46b;
+    --color-kind-task-soft: #3a2f16;
+    --color-kind-focus: #7fd6a2;
+    --color-kind-focus-soft: #1d3527;
+    --color-kind-date: #f2a6cf;
+    --color-kind-date-soft: #3e1f30;
+    --color-kind-reminder: #c3b6ff;
+    --color-kind-reminder-soft: #2a2447;
+    --color-now: #ff8a80;
   }
 }
 
 :root[data-theme='dark'] {
-  --color-bg: #101216;
-  --color-surface: #191c22;
-  --color-surface-raised: #232730;
-  --color-text: #eceef2;
-  --color-text-muted: #a3aab6;
-  --color-border: #343944;
-  --color-accent: #8fa8ff;
-  --color-accent-text: #0b1330;
+  --color-bg: #0f1412;
+  --color-surface: #18201c;
+  --color-surface-raised: #222c27;
+  --color-text: #e8efea;
+  --color-text-muted: #a3b2a9;
+  --color-border: #33403a;
+  --color-accent: #7fd6a2;
+  --color-accent-text: #0b2416;
+  --color-accent-soft: #1d3527;
   --color-danger: #ffb4ab;
   --color-success: #7dd99a;
   --color-warning: #f2c46b;
-  --color-focus: #8fa8ff;
+  --color-focus: #8fb4ff;
+  --color-kind-event: #9dbcff;
+  --color-kind-event-soft: #1c2a44;
+  --color-kind-task: #f2c46b;
+  --color-kind-task-soft: #3a2f16;
+  --color-kind-focus: #7fd6a2;
+  --color-kind-focus-soft: #1d3527;
+  --color-kind-date: #f2a6cf;
+  --color-kind-date-soft: #3e1f30;
+  --color-kind-reminder: #c3b6ff;
+  --color-kind-reminder-soft: #2a2447;
+  --color-now: #ff8a80;
 }
 
 @media (prefers-reduced-motion: reduce) {
