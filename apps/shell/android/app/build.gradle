@@ -19,6 +19,15 @@ android {
     }
     // HB-REL-02: release signing comes only from the protected CI "release" environment.
     signingConfigs {
+        // Fixed debug key so every CI debug APK installs over the previous one (a fresh CI runner
+        // would otherwise generate a new key per build). Debug-only and public by design; release
+        // signing below comes from the protected "release" environment.
+        debug {
+            storeFile rootProject.file('debug.keystore')
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
         release {
             def ks = System.getenv('SUPERAPP_KEYSTORE_PATH')
             if (ks) {
@@ -30,6 +39,9 @@ android {
         }
     }
     buildTypes {
+        debug {
+            signingConfig signingConfigs.debug
+        }
         release {
             if (System.getenv('SUPERAPP_KEYSTORE_PATH')) signingConfig signingConfigs.release
             minifyEnabled false

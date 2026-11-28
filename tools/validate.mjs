@@ -47,6 +47,10 @@ if (existsSync(join(ROOT, manifestPath))) {
   check('Cleartext traffic disabled (network_security_config)', !/usesCleartextTraffic="true"/.test(am) && /cleartextTrafficPermitted="false"/.test(read('apps/shell/android/app/src/main/res/xml/network_security_config.xml')));
 }
 
+const gradle = read('apps/shell/android/app/build.gradle');
+const releaseBlock = gradle.split(/buildTypes\s*\{/)[1]?.split(/release\s*\{/)[1]?.split('}')[0] ?? '';
+check('Release build never signs with the debug key (HB-REL-02)', releaseBlock !== '' && !/signingConfigs\.debug/.test(releaseBlock));
+
 const ci = read('.github/workflows/ci.yml') + read('.github/workflows/codeql.yml') + read('.github/workflows/release.yml');
 const unpinned = [...ci.matchAll(/uses:\s*([^\s#]+)/g)].map((m) => m[1]).filter((u) => !/@[0-9a-f]{40}$/.test(u));
 check('CI actions pinned to full commit SHAs (HB-SUP-01)', unpinned.length === 0, unpinned.join(', '));

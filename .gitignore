@@ -6,6 +6,8 @@ test-results/
 playwright-report/
 .env
 *.keystore
+# Debug-only signing key (public by design; release keys never live in the repo):
+!apps/shell/android/debug.keystore
 *.jks
 server/pb_data/
 server/bin/
