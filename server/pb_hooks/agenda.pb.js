@@ -5,40 +5,48 @@
 
 onRecordAfterCreateSuccess((e) => {
   e.next();
-  require(`${__hooks}/lib/agenda-core.js`).syncKeyDate(e.app, (s) => $security.md5(s), e.record.id, new Date(new Date().toDateString()));
+  const lib = require(`${__hooks}/lib/agenda-core.js`);
+  lib.guarded("syncKeyDate", () => lib.syncKeyDate(e.app, (s) => $security.md5(s), e.record.id, new Date(new Date().toDateString())));
 }, "contacts_key_dates");
 
 onRecordAfterUpdateSuccess((e) => {
   e.next();
-  require(`${__hooks}/lib/agenda-core.js`).syncKeyDate(e.app, (s) => $security.md5(s), e.record.id, new Date(new Date().toDateString()));
+  const lib = require(`${__hooks}/lib/agenda-core.js`);
+  lib.guarded("syncKeyDate", () => lib.syncKeyDate(e.app, (s) => $security.md5(s), e.record.id, new Date(new Date().toDateString())));
 }, "contacts_key_dates");
 
 onRecordAfterCreateSuccess((e) => {
   e.next();
-  require(`${__hooks}/lib/agenda-core.js`).syncReachOut(e.app, (s) => $security.md5(s), e.record.id);
+  const lib = require(`${__hooks}/lib/agenda-core.js`);
+  lib.guarded("syncReachOut", () => lib.syncReachOut(e.app, (s) => $security.md5(s), e.record.id));
 }, "contacts_people");
 
 onRecordAfterUpdateSuccess((e) => {
   e.next();
-  require(`${__hooks}/lib/agenda-core.js`).syncReachOut(e.app, (s) => $security.md5(s), e.record.id);
+  const lib = require(`${__hooks}/lib/agenda-core.js`);
+  lib.guarded("syncReachOut", () => lib.syncReachOut(e.app, (s) => $security.md5(s), e.record.id));
 }, "contacts_people");
 
 // A logged touch moves the reach-out due date.
 onRecordAfterCreateSuccess((e) => {
   e.next();
   const lib = require(`${__hooks}/lib/agenda-core.js`);
-  const people = e.app.findRecordsByFilter("contacts_people", "entity = {:e}", "", 1, 0, { e: e.record.getString("entity") });
-  if (people.length) lib.syncReachOut(e.app, (s) => $security.md5(s), people[0].id);
+  lib.guarded("syncReachOut", () => {
+    const people = e.app.findRecordsByFilter("contacts_people", "entity = {:e}", "", 1, 0, { e: e.record.getString("entity") });
+    if (people.length) lib.syncReachOut(e.app, (s) => $security.md5(s), people[0].id);
+  });
 }, "contacts_interactions");
 
 for (const c of ["eatwell_entries", "eatwell_water"]) {
   onRecordAfterCreateSuccess((e) => {
     e.next();
-    require(`${__hooks}/lib/agenda-core.js`).syncEatwellDay(e.app, (s) => $security.md5(s), e.record.getString("owner"), e.record.getString("date"));
+    const lib = require(`${__hooks}/lib/agenda-core.js`);
+    lib.guarded("syncEatwellDay", () => lib.syncEatwellDay(e.app, (s) => $security.md5(s), e.record.getString("owner"), e.record.getString("date")));
   }, c);
   onRecordAfterUpdateSuccess((e) => {
     e.next();
-    require(`${__hooks}/lib/agenda-core.js`).syncEatwellDay(e.app, (s) => $security.md5(s), e.record.getString("owner"), e.record.getString("date"));
+    const lib = require(`${__hooks}/lib/agenda-core.js`);
+    lib.guarded("syncEatwellDay", () => lib.syncEatwellDay(e.app, (s) => $security.md5(s), e.record.getString("owner"), e.record.getString("date")));
   }, c);
 }
 
@@ -49,6 +57,6 @@ cronAdd("agenda_key_dates", "7 0 * * *", () => {
   for (let page = 0; ; page++) {
     const batch = $app.findRecordsByFilter("contacts_key_dates", "deleted = false", "id", 200, page * 200);
     if (batch.length === 0) break;
-    for (const kd of batch) lib.syncKeyDate($app, (s) => $security.md5(s), kd.id, today);
+    for (const kd of batch) lib.guarded("syncKeyDate", () => lib.syncKeyDate($app, (s) => $security.md5(s), kd.id, today));
   }
 });

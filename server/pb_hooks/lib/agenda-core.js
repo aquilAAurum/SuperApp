@@ -151,6 +151,38 @@ function differs(rec, want, fields) {
 
 // ---- PocketBase adapter (JSVM only) ----------------------------------------------------------
 
+/**
+ * The core_people id to link. Hooks run in file order (agenda.pb.js before contacts.pb.js), so on a
+ * new contact the core_people twin may not exist yet: create it first (syncCorePerson is idempotent).
+ * Returns "" if it still cannot be found.
+ */
+function personRef(app, id) {
+  if (!id) return "";
+  try {
+    require(__hooks + "/lib/contacts-core.js").syncCorePerson(app, id);
+  } catch (_) {
+    // Linking is best-effort; the item is still projected without a person.
+  }
+  try {
+    app.findRecordById("core_people", id);
+    return id;
+  } catch (_) {
+    return "";
+  }
+}
+
+/**
+ * Runs a projection without ever failing the write that triggered it: Today is secondary to the
+ * Contacts or EatWell save. Failures are logged as one JSON line (no record content).
+ */
+function guarded(name, fn) {
+  try {
+    fn();
+  } catch (err) {
+    console.log(JSON.stringify({ level: "error", msg: "agenda.projection_failed", projection: name, error: String(err).slice(0, 300) }));
+  }
+}
+
 function upsert(app, collection, id, owner, want, fields) {
   var rec;
   try {
@@ -189,7 +221,9 @@ function syncKeyDate(app, hash, id, today) {
   if (found.length) person = { id: found[0].id, display_name: found[0].getString("display_name") };
   var plain = JSON.parse(JSON.stringify(kd.publicExport()));
   var key = "contacts:key_date:" + id;
-  upsert(app, "core_agenda", projectedId(hash, owner, key), owner, keyDateItem(plain, person, today), AGENDA_FIELDS);
+  var item = keyDateItem(plain, person, today);
+  if (item) item.person = personRef(app, item.person);
+  upsert(app, "core_agenda", projectedId(hash, owner, key), owner, item, AGENDA_FIELDS);
 }
 
 function syncReachOut(app, hash, personId) {
@@ -218,7 +252,9 @@ function syncReachOut(app, hash, personId) {
     );
   }
   var key = "contacts:reach_out:" + personId;
-  upsert(app, "core_agenda", projectedId(hash, owner, key), owner, reachOutItem(row), AGENDA_FIELDS);
+  var item = reachOutItem(row);
+  if (item) item.person = personRef(app, item.person);
+  upsert(app, "core_agenda", projectedId(hash, owner, key), owner, item, AGENDA_FIELDS);
 }
 
 function syncEatwellDay(app, hash, owner, date) {
@@ -244,6 +280,7 @@ module.exports = {
   reachRow: reachRow,
   eatwellGlance: eatwellGlance,
   projectedId: projectedId,
+  guarded: guarded,
   syncKeyDate: syncKeyDate,
   syncReachOut: syncReachOut,
   syncEatwellDay: syncEatwellDay,
