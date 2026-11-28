@@ -2,7 +2,7 @@
 
 Run 2026-11-28 from a cloud session (network: the Supra environment with the weather hosts allowed). Point: Milford, MA (42.14, −71.52), the PRD §3.3 fallback. Scripts in [`spikes/weather-r0/`](../../../spikes/weather-r0/); no data committed. Terms come from the providers' pages as found by web search (the pages themselves could not be fetched from this session), so each "Terms" cell names its source and anything marked *verify* is not confirmed yet.
 
-## Summary and decisions proposed
+## Summary and decisions (approved by Nick 2026-11-28)
 
 | Spike | Result | Proposed decision |
 | :-- | :-- | :-- |

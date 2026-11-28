@@ -138,31 +138,26 @@ def align(t):
     return t.replace(minute=t.minute - t.minute % 5, second=0, microsecond=0)
 
 
-# ---- events from ASOS
-rows = list(csv.DictReader(open(asos_csv)))
-cands = set()
-dry = {}
-for r in rows:
-    wet = r["p01i"] not in ("0.00", "M")
-    st = r["station"]
-    if wet and dry.get(st, 0) >= 6:
-        cands.add(datetime.strptime(r["valid"], "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc).replace(minute=0))
-    dry[st] = 0 if wet else dry.get(st, 0) + 1
-events = sorted(cands)
-# merge onsets within 3 h of each other (same system seen at different stations)
-merged = []
-for e in events:
-    if not merged or e - merged[-1] > timedelta(hours=3):
-        merged.append(e)
+# ---- events and radar truth (also used by nowcast_blend_eval.py)
+def events_from_asos(path):
+    """Rain-onset hours (UTC) after >= 6 dry hours at any station, merged when within 3 h of each other."""
+    cands, dry = set(), {}
+    for r in csv.DictReader(open(path)):
+        wet = r["p01i"] not in ("0.00", "M")
+        st = r["station"]
+        if wet and dry.get(st, 0) >= 6:
+            cands.add(datetime.strptime(r["valid"], "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc).replace(minute=0))
+        dry[st] = 0 if wet else dry.get(st, 0) + 1
+    merged = []
+    for e in sorted(cands):
+        if not merged or e - merged[-1] > timedelta(hours=3):
+            merged.append(e)
+    return merged
 
-results, controls = [], []
-for hour in merged:
-    _decoded.clear()
-    span = [hour - timedelta(minutes=m) for m in range(-60, 4 * 60 + 25, 5)]  # hour-4h20m .. hour+1h
-    prefetch(span)
-    # radar truth: first 5-min frame in [hour-2h, hour+1h] with rain at the point after a dry frame
-    t, t0 = hour - timedelta(hours=2), None
-    was_dry = False
+
+def truth_onset(hour, verbose=True):
+    """First radar frame in [hour-2h, hour+1h] with rain at the point after a fully dry hour; None if none."""
+    t, t0, was_dry = hour - timedelta(hours=2), None, False
     while t <= hour + timedelta(hours=1):
         wet = at_point(frame(t)) >= RAIN_DBZ
         if wet and was_dry:
@@ -171,29 +166,46 @@ for hour in merged:
         was_dry = was_dry or not wet
         t += timedelta(minutes=5)
     if t0 is None:
-        print(f"{hour:%Y-%m-%d %H:%M}Z  no clean radar onset at the point; skipped")
-        continue
+        if verbose:
+            print(f"{hour:%Y-%m-%d %H:%M}Z  no clean radar onset at the point; skipped")
+        return None
     if any(at_point(frame(t0 - timedelta(minutes=m))) >= RAIN_DBZ for m in range(5, 65, 5)):
-        print(f"{t0:%Y-%m-%d %H:%M}Z  rain within the hour before onset (intermittent); skipped")
-        continue
-    row = [f"{t0:%Y-%m-%d %H:%M}Z"]
-    for lead in (60, 45, 30, 15):
-        p = nowcast(t0 - timedelta(minutes=lead))
-        results.append((lead, p))
-        row.append(f"T-{lead}: {'none' if p is None else str(p) + 'm'}")
-    for back in (240, 210):
-        c = nowcast(align(t0 - timedelta(minutes=back)))
-        # A control is a false alarm only if it predicts onset within 60 min and the point stays dry for 60+ min.
-        controls.append(c is not None and c <= 60 and back - (c or 0) > 60)
-    print("  ".join(row))
+        if verbose:
+            print(f"{t0:%Y-%m-%d %H:%M}Z  rain within the hour before onset (intermittent); skipped")
+        return None
+    return t0
 
-print("\nSummary (predicted onset vs truth; error = predicted - actual lead)")
-for lead in (60, 45, 30, 15):
-    ps = [p for l, p in results if l == lead]
-    hits = [p for p in ps if p is not None and p <= lead + 30]
-    errs = [p - lead for p in hits]
-    print(
-        f"  issued T-{lead:2}: n={len(ps):2}  detected={len(hits):2} ({100*len(hits)/max(1,len(ps)):3.0f}%)"
-        + (f"  median error={np.median(errs):+.0f} min  |err|<=10 min: {sum(abs(e)<=10 for e in errs)}" if errs else "")
-    )
-print(f"  dry controls: n={len(controls)}  false alarms (onset <= 60 min predicted, none came): {sum(controls)}")
+
+def main():
+    results, controls = [], []
+    for hour in events_from_asos(asos_csv):
+        _decoded.clear()
+        prefetch([hour - timedelta(minutes=m) for m in range(-60, 4 * 60 + 25, 5)])  # hour-4h20m .. hour+1h
+        t0 = truth_onset(hour)
+        if t0 is None:
+            continue
+        row = [f"{t0:%Y-%m-%d %H:%M}Z"]
+        for lead in (60, 45, 30, 15):
+            p = nowcast(t0 - timedelta(minutes=lead))
+            results.append((lead, p))
+            row.append(f"T-{lead}: {'none' if p is None else str(p) + 'm'}")
+        for back in (240, 210):
+            c = nowcast(align(t0 - timedelta(minutes=back)))
+            # A control is a false alarm if it predicts onset within 60 min (the real onset is 3.5-4 h away).
+            controls.append(c is not None and c <= 60 and back - (c or 0) > 60)
+        print("  ".join(row))
+
+    print("\nSummary (predicted onset vs truth; error = predicted - actual lead)")
+    for lead in (60, 45, 30, 15):
+        ps = [p for l, p in results if l == lead]
+        hits = [p for p in ps if p is not None and p <= lead + 30]
+        errs = [p - lead for p in hits]
+        print(
+            f"  issued T-{lead:2}: n={len(ps):2}  detected={len(hits):2} ({100*len(hits)/max(1,len(ps)):3.0f}%)"
+            + (f"  median error={np.median(errs):+.0f} min  |err|<=10 min: {sum(abs(e)<=10 for e in errs)}" if errs else "")
+        )
+    print(f"  dry controls: n={len(controls)}  false alarms (onset <= 60 min predicted, none came): {sum(controls)}")
+
+
+if __name__ == "__main__":
+    main()

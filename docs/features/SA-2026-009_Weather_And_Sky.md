@@ -2,7 +2,7 @@
 
 - **Feature ID:** SA-2026-009
 - **Doc ID:** D02 (PRD)   · **Producer:** Qz   · **Consumers:** Jane, Jules, Priya, Kumi Wai, Russ, Theo
-- **Version:** 0.5   · **Status:** Proposal (scoping; O-1 to O-7 decided by Nick 2026-11-28; O-8 deferred until a station is bought; no code)   · **Date:** 2026-11-28
+- **Version:** 0.5   · **Status:** Proposal (scoping; O-1 to O-7 decided by Nick 2026-11-28; O-8 deferred until a station is bought; spike decisions S-1 to S-4 approved 2026-11-28; S-3b running; no code)   · **Date:** 2026-11-28
 - **Owner(s):** Qz (content), Nick (approval)   · **T-Shirt Size:** L (four releases, §9)
 - **Subapp id:** `weather` (collections `weather_*`, events `weather.*`, deep links `superapp://weather/...`)
 - **Depends on:** SA-2026-003 (data and sync), SA-2026-004 (M4: `device.location`, `notify.post`), SA-2026-005 (M5: bus, inbox, deep links), the M6 server-proxy pattern, and an **agenda** (SA-2026-010, proposed in §7; none exists yet).
