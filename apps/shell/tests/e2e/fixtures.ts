@@ -12,11 +12,13 @@ export interface MockServer {
   offline: boolean;
   /** Delay before answering ops (the op is applied first, as a slow server would). */
   opsDelayMs: number;
+  /** Files served at /api/files/<collection>/<id>/<name> (subapp bundles), only with a file token. */
+  files: Map<string, Buffer>;
 }
 
 /** Mocks the PocketBase routes the shell uses in M2. Nothing leaves the machine. */
 export async function mockPocketBase(page: Page): Promise<MockServer> {
-  const state: MockServer = { devicesCreated: [], requests: [], ops: new FakeOpsServer(), offline: false, opsDelayMs: 0 };
+  const state: MockServer = { devicesCreated: [], requests: [], ops: new FakeOpsServer(), offline: false, opsDelayMs: 0, files: new Map() };
   const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
   await page.route(`${SERVER}/**`, async (route) => {
     const req = route.request();
@@ -42,6 +44,13 @@ export async function mockPocketBase(page: Page): Promise<MockServer> {
       const since = /updated >= "([^"]*)"/.exec(url.searchParams.get('filter') ?? '')?.[1] ?? '';
       const items = state.ops.since(list[1]!, since);
       return json(200, { page: 1, perPage: 1000, totalItems: items.length, totalPages: 1, items });
+    }
+    if (url.pathname === '/api/files/token' && req.method() === 'POST') return json(200, { token: 'file-token' });
+    const file = /^\/api\/files\/([a-z_]+)\/([a-z0-9]{15})\/(.+)$/.exec(url.pathname);
+    if (file && req.method() === 'GET') {
+      const body = url.searchParams.get('token') === 'file-token' ? state.files.get(`${file[1]}/${file[2]}/${file[3]}`) : undefined;
+      if (!body) return json(404, { status: 404, message: 'Not found (mock)', data: {} });
+      return route.fulfill({ status: 200, headers: { ...cors, 'content-type': 'application/zip' }, body }).catch(() => undefined);
     }
     if (url.pathname === '/api/health') return json(200, { code: 200, message: 'API is healthy.' });
     if (url.pathname === '/api/collections/users/auth-with-password') {

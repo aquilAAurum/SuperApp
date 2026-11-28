@@ -141,6 +141,8 @@ jobs:
           $dir = "$env:RUNNER_TEMP\pocketbase"
           Start-Process -FilePath "$dir\pocketbase.exe" -ArgumentList @('serve', '--http', '127.0.0.1:8090', '--dir', "$dir\pb_data", '--migrationsDir', "$dir\pb_migrations", '--hooksDir', "$dir\pb_hooks") -RedirectStandardOutput "$dir\out.log" -RedirectStandardError "$dir\err.log"
           for ($i = 0; $i -lt 40; $i++) { try { if ((Invoke-RestMethod http://127.0.0.1:8090/api/health).code -eq 200) { break } } catch { Start-Sleep -Milliseconds 500 } }
+          .\tools\sync-subapps.ps1 -Target $dir -NoPull
+          $env:SUPRA_SUBAPPS_INBOX = "$dir\subapps_inbox"
           corepack pnpm --filter @superapp/server test:integration
           if ($LASTEXITCODE -ne 0) { Get-Content "$dir\out.log", "$dir\err.log"; exit 1 }
 

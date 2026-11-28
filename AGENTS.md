@@ -18,4 +18,5 @@ Thin adapter for AI coding agents of any vendor. It points to sources of truth a
    ```
    The PocketBase integration test and the Android build run in CI (`.github/workflows/ci.yml`).
 8. **Architecture rules are lint errors**, not suggestions: native plugins only in `apps/shell/src/native/CapabilityBroker.ts`; server calls only in `apps/shell/src/server/`; subapps import only `@superapp/sdk`; no `innerHTML`/`alert`.
-9. **Never** skip, disable or quarantine a test to get green, weaken a Hardening Baseline control, add an Android permission ahead of its feature, or merge to `main`. Nick merges.
+9. **Shipping a subapp change** (ADR-009): bump its version, run `pnpm publish:subapp <id>`, commit `published/` with the source. No APK is needed unless the shell, bridge or Android project changed.
+10. **Never** skip, disable or quarantine a test to get green, weaken a Hardening Baseline control, add an Android permission ahead of its feature, or merge to `main`. Nick merges.

@@ -32,6 +32,14 @@ node tools/pack.mjs subapps/<app>    # validates app.json, writes release/<id>-<
 
 Upload to the server `subapps` collection arrives with the App manager (M5). Until then, reference apps are built into the shell with `--builtin apps/shell/public`.
 
+## Publish an update (no APK, ADR-009)
+
+1. Bump `version` in `app.json` and `package.json` (published versions are immutable and must increase).
+2. `pnpm publish:subapp <id>`: builds and writes `published/<id>/<id>-<version>.zip`, `.zip.sha256`, `.json`.
+3. Commit `published/` with the source change and open a PR. When Nick merges to `main`, the mini PC pulls it within 15 minutes and phones install it on their next check (Settings → *Check for updates* to pull now). It applies the next time the app starts; two crashes within 60 s roll it back.
+
+Shell, bridge or Android changes still need a new APK.
+
 ## Migrating an existing vibe-coded app
 
 1. Move its code under `subapps/<id>/`, add `app.json` and `@superapp/sdk`.

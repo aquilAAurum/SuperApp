@@ -5,6 +5,8 @@ import type { Logger } from '../core/logger.ts';
 export interface BundleRef extends InstalledApp {
   /** Directory of the unpacked bundle, served by the shell origin, e.g. `/builtin/hello/1.0.0/`. */
   base: string;
+  /** Server-installed bundles (ADR-009) are read from the local database instead of `base`. */
+  loadHtml?: () => Promise<string>;
 }
 
 /**

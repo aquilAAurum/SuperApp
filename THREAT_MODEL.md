@@ -72,6 +72,15 @@ New surface: `contacts_*` collections and the `core_people` mirror hook (built, 
 | T-28 | Info disclosure | **Identifiers in logs**: launch instrumentation leaks numbers, addresses or message bodies into diagnostics | M | M | Medium | `contacts.launch` events carry channel, handler, network/context ids, ranks and timings only; logger redaction (HB-DATA-03) extended with E.164/email patterns | R2: unit "launch log carries no address or number" |
 
 
+### C.3 Subapp updates by pull (ADR-009)
+
+| ID | STRIDE | Threat | L | I | Risk | Mitigation | Verified by |
+| :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- |
+| T-29 | Tampering | **Modified bundle in transit or on the server** (inbox file swapped, record edited) runs on the phone | L | H | Medium | Phone verifies the zip's SHA-256 against the record and the zip's own `app.json` (hash-covered) for id/version and manifest validity before storing; clients cannot write `subapps`; protected file field; Step 0 checks `published/` integrity | unit `updates.test.ts` "rejects a zip whose hash does not match…"; e2e "hash does not match is rejected"; integration "published subapps" |
+| T-30 | Elevation | **Malicious or careless update** (a merged PR) ships hostile code or adds scopes | L | H | Medium | Release = Nick merging to `main` (branch protection, PR diff shows `app.json` scopes); bundle runs in the same sandbox/CSP as builtins (`connect-src 'none'`, no same-origin); consent sheets for new scopes arrive with M4 | Review; e2e isolation tests apply to all bundles |
+| T-31 | DoS | **Broken update** bricks an app, or a downgrade/replay reinstalls an old vulnerable version | M | M | Medium | Rollback after two crashes within 60 s; rolled-back versions blocked; only versions newer than installed and builtin are taken; published versions immutable and must increase; 10 MB cap | unit rollback cases; e2e "crashes twice within 60 s is rolled back" |
+| T-32 | Tampering | **Mini PC pulls a rewritten `main`** | L | M | Low | `sync-subapps.ps1` fast-forward only, refuses a diverged branch; copies bundles only (no hooks/migrations) | Script review; Windows CI job runs the copy path |
+
 ## D. Data Inventory Delta (Priya)
 
 See [`project-profile.md` §5](project-profile.md). New with SA-2026-007 (R0): third-party contact data in `contacts_*` and `core_people` (owner-only; soft deletes purged after 14 days, ADR-005), the importer's local SQLite file on the machine that runs the migration (git-ignored; delete after cutover), and identities (the owner's own addresses and numbers, R1). No message content is stored; interactions hold date, channel, outcome and a short note. New in M3: encrypted local mirror and outbox of synced records (Android), IndexedDB copy in browser builds. New in M1–M2: server token and device id (Keystore), `core_devices` row, in-memory diagnostics buffers, `processed_ops` ledger (30-day retention, no payload beyond the op result).

@@ -28,6 +28,18 @@ powershell -ExecutionPolicy Bypass -File tools\install-windows.ps1
 - **Windows:** disable sleep; BIOS "restore on AC power loss"; Windows Update active hours with restarts at 04:00.
 - **Later deploys:** `pwsh tools/deploy-server.ps1` (copies migrations and hooks, restarts the service).
 
+### 1.1 Subapp updates (ADR-009)
+
+One-time, on the mini PC, from the SuperApp checkout (on `main`):
+
+```powershell
+pwsh tools/deploy-server.ps1          # installs the subapps hook and protected-bundle migration
+pwsh tools/sync-subapps.ps1           # first pull + copy now
+pwsh tools/sync-subapps.ps1 -Register # then every 15 minutes (scheduled task "Supra subapp sync")
+```
+
+The task runs as the signed-in user (uses the checkout's existing git credentials). Check it: Task Scheduler → *Supra subapp sync* → Last Run Result; PocketBase logs show `subapps.imported` / `subapps.import_rejected`. On the phone, Settings → Subapps shows each app's version and source; *Check for updates* pulls now.
+
 ## 2. Phone
 
 1. Download the APK from the GitHub Release (or the CI `superapp-debug-apk` artifact) and install it (`adb install` or the Android installer).

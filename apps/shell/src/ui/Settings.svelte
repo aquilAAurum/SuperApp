@@ -18,6 +18,29 @@
     showToast(on ? 'Safe mode on: all subapps disabled.' : 'Safe mode off.');
   }
 
+  type Row = { id: string; name: string; version: string; source: string };
+  const rows = (): Row[] =>
+    [...shell.bundles.values()]
+      .map((b) => ({ id: b.manifest.id, name: b.manifest.name, version: b.manifest.version, source: b.source === 'server' ? 'from server' : 'built in' }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  let apps = $state<Row[]>(rows());
+  let checking = $state(false);
+
+  async function checkUpdates() {
+    checking = true;
+    try {
+      const res = await shell.checkForUpdates();
+      const rejected = res.filter((r) => r.outcome === 'rejected');
+      if (rejected.length) showToast(`Update rejected: ${rejected.map((r) => `${r.appId} ${r.version} (${r.reason})`).join('; ')}`, 'error', 8000);
+      else if (!res.length) showToast('All subapps are up to date.');
+    } catch (err) {
+      showToast(`Couldn't check for updates: ${(err as Error).message}`, 'error');
+    } finally {
+      checking = false;
+      apps = rows();
+    }
+  }
+
   async function signOut() {
     await shell.signOut();
     showToast('Signed out.');
@@ -53,12 +76,30 @@
   </div>
 </section>
 
+<section class="section" aria-labelledby="subapps-heading">
+  <h2 id="subapps-heading">Subapps</h2>
+  <ul class="apps" data-testid="settings-subapps">
+    {#each apps as a (a.id)}
+      <li data-app-id={a.id}>{a.name} <span class="muted">{a.version} · {a.source}</span></li>
+    {/each}
+  </ul>
+  <button type="button" onclick={checkUpdates} disabled={checking}>{checking ? 'Checking…' : 'Check for updates'}</button>
+  <p class="muted">Updates are pulled from your server when Supra opens and every 6 hours. An update applies the next time that app starts.</p>
+</section>
+
 <section class="section">
   <h2>About</h2>
   <p>~Supra~ shell {SHELL_VERSION}</p>
 </section>
 
 <style>
+  .apps {
+    list-style: none;
+    margin: 0 0 var(--space-3);
+    padding: 0;
+    display: grid;
+    gap: var(--space-1);
+  }
   .bar {
     display: flex;
     align-items: center;

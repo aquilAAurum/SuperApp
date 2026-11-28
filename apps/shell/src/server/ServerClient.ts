@@ -9,6 +9,7 @@ import type { Logger } from '../core/logger.ts';
 import type { OutboxRow, SyncRecord } from '../sync/store.ts';
 import type { SendResult } from '../sync/worker.ts';
 import { validateServerUrl } from '../core/url-policy.ts';
+import type { SubappRecord } from '../host/updates.ts';
 
 export const SECRET_TOKEN = 'superapp.server.token';
 export const SECRET_DEVICE = 'superapp.device.id';
@@ -215,6 +216,28 @@ export class ServerClient {
     } catch (err) {
       if (err instanceof ClientResponseError && err.status === 404) return null;
       throw err;
+    }
+  }
+
+  /** Published subapp bundles (ADR-009). The phone pulls; the server never pushes code. */
+  async listSubapps(): Promise<SubappRecord[]> {
+    const items = await this.client().collection('subapps').getFullList({ sort: 'appId,version', batch: 200, fields: 'id,collectionId,collectionName,appId,version,sha256,bundle' });
+    return items.map((r) => ({ id: r.id, appId: String(r.appId), version: String(r.version), sha256: String(r.sha256), bundle: String(r.bundle) }));
+  }
+
+  /** Downloads a bundle zip. The `bundle` file field is protected, so the URL carries a short-lived file token. */
+  async downloadSubapp(rec: SubappRecord, timeoutMs = 60_000): Promise<Uint8Array> {
+    const pb = this.client();
+    const token = await pb.files.getToken();
+    const url = pb.files.getURL({ id: rec.id, collectionName: 'subapps', collectionId: 'subapps' }, rec.bundle, { token });
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      const res = await this.fetchImpl(url, { signal: ctrl.signal, cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status} downloading ${rec.appId}@${rec.version}`);
+      return new Uint8Array(await res.arrayBuffer());
+    } finally {
+      clearTimeout(timer);
     }
   }
 

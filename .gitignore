@@ -16,3 +16,5 @@ apps/shell/android/.gradle/
 apps/shell/android/local.properties
 apps/shell/public/builtin/
 subapps/*/release/
+
+server/subapps_inbox/

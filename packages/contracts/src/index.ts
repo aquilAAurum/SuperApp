@@ -7,3 +7,4 @@ export * from './envelope.ts';
 export * from './manifest.ts';
 export * from './methods.ts';
 export * from './capabilities.ts';
+export * from './semver.ts';

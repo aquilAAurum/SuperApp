@@ -12,6 +12,7 @@ import { coreHandlers } from './bridge/handlers.ts';
 import { SubappLifecycle, type AppStatus } from './host/lifecycle.ts';
 import { domFrameFactory } from './host/frames.ts';
 import { loadBuiltinBundles, type BundleRef } from './host/bundles.ts';
+import { SubappUpdater, type CheckResult, type InstalledBundle } from './host/updates.ts';
 import { CapabilityBroker } from './native/CapabilityBroker.ts';
 import { ServerClient, type Reachability, type SignedInUser } from './server/ServerClient.ts';
 import { writable, type Writable } from './ui/store.ts';
@@ -42,6 +43,13 @@ export class Shell {
   readonly grants = new MemoryGrantStore();
   readonly logs = new RingLog<LogEntry>(500);
   readonly bundles = new Map<string, BundleRef>();
+  /** Copies shipped in the APK; the fallback when a server-installed version is rolled back. */
+  private readonly builtins = new Map<string, BundleRef>();
+  /** Updates waiting for their app to stop running (spec §Hot updates: applies on next start). */
+  private readonly pendingBundles = new Map<string, BundleRef>();
+  readonly updater: SubappUpdater;
+  private lastUpdateCheck = 0;
+  static readonly UPDATE_INTERVAL_MS = 6 * 60 * 60 * 1000;
   readonly titles: Writable<Record<string, string>> = writable({});
   readonly state: Writable<ShellState> = writable<ShellState>({
     user: null,
@@ -85,8 +93,15 @@ export class Shell {
       route: () => '/',
     });
     const kv: Promise<KvBackend> = this.broker.openDatabase().then((db) => (db ? new SqliteKv(db) : new IndexedDbKv()));
+    const db = new DeferredKv(kv);
+    this.updater = new SubappUpdater({
+      kv: db,
+      source: this.server,
+      logger: log,
+      builtinVersion: (appId) => this.builtins.get(appId)?.manifest.version ?? null,
+    });
     this.sync = new SyncEngine({
-      kv: new DeferredKv(kv),
+      kv: db,
       server: this.server,
       logger: log,
       emit: (appId, topic, payload) => void this.router.emit(appId, topic, payload),
@@ -130,6 +145,7 @@ export class Shell {
       router: this.router,
       logger: log,
     });
+    this.cleanups.push(this.watchUpdatedApps());
     const onMessage = (e: MessageEvent) => {
       this.handshake.onWindowMessage({ source: e.source, data: e.data, origin: e.origin });
     };
@@ -151,9 +167,12 @@ export class Shell {
     const [url, safe, theme] = await Promise.all([this.broker.getPref('serverUrl'), this.broker.getPref('safeMode'), this.broker.getPref('theme')]);
     this.state.update((s) => ({ ...s, safeMode: safe === '1', theme: theme === 'light' || theme === 'dark' ? theme : 'system' }));
     for (const b of await loadBuiltinBundles(log)) {
+      this.builtins.set(b.manifest.id, b);
       this.bundles.set(b.manifest.id, b);
       this.lifecycle.register(b);
     }
+    // Updates pulled earlier run from the local database, so they work offline (ADR-009).
+    for (const b of await this.updater.installed().catch(() => [])) this.installBundle(serverRef(b));
     this.lifecycle.setSafeMode(safe === '1');
     if (!url) return 'setup';
     try {
@@ -207,6 +226,8 @@ export class Shell {
       else this.sync.setOnline(false);
     }).then((off) => this.cleanups.push(off));
     void this.broker.onResume(() => void this.onResume()).then((off) => this.cleanups.push(off));
+    const updates = setInterval(() => void this.checkForUpdates(), Shell.UPDATE_INTERVAL_MS);
+    this.cleanups.push(() => clearInterval(updates));
     void this.onResume();
   }
 
@@ -218,6 +239,70 @@ export class Shell {
     await this.sync.catchUpAll();
     await this.subscribeRealtime();
     this.sync.schedule(0);
+    if (Date.now() - this.lastUpdateCheck >= Shell.UPDATE_INTERVAL_MS) void this.checkForUpdates();
+  }
+
+  // --- subapp updates (ADR-009) ---
+
+  /** Pull newer subapp bundles from the server. Safe to call any time; one check runs at a time. */
+  async checkForUpdates(): Promise<CheckResult[]> {
+    this.lastUpdateCheck = Date.now();
+    let results: CheckResult[];
+    try {
+      results = await this.updater.check();
+    } catch (err) {
+      log.warn('bundles.check_failed', { error: (err as Error).message });
+      throw err;
+    }
+    for (const r of results) {
+      if (r.outcome !== 'installed') continue;
+      const b = await this.updater.current(r.appId);
+      if (b) this.installBundle(serverRef(b));
+      showToast(`${this.bundles.get(r.appId)?.manifest.name ?? r.appId} updated to ${r.version}.`);
+    }
+    return results;
+  }
+
+  /** Swap in a bundle now if its app isn't running, otherwise when it next stops. */
+  private installBundle(ref: BundleRef): void {
+    const st = this.lifecycle.get(ref.manifest.id)?.state;
+    if (st === 'active' || st === 'suspended' || st === 'starting') {
+      this.pendingBundles.set(ref.manifest.id, ref);
+      return;
+    }
+    this.pendingBundles.delete(ref.manifest.id);
+    this.bundles.set(ref.manifest.id, ref);
+    this.lifecycle.register(ref);
+  }
+
+  /** Crash and start events feed the updater's rollback rule; stopped apps pick up pending updates. */
+  private watchUpdatedApps(): () => void {
+    const prev = new Map<string, string>();
+    return this.lifecycle.subscribe((all) => {
+      for (const s of all) {
+        const before = prev.get(s.appId);
+        prev.set(s.appId, s.state);
+        if (before === s.state) continue;
+        const fromServer = this.bundles.get(s.appId)?.source === 'server';
+        if (fromServer && before === 'starting' && (s.state === 'active' || s.state === 'suspended')) void this.updater.onStarted(s.appId);
+        if (fromServer && s.state === 'crashed') void this.onUpdatedAppCrashed(s.appId);
+        const pending = this.pendingBundles.get(s.appId);
+        if (pending && (s.state === 'installed' || s.state === 'crashed')) this.installBundle(pending);
+      }
+    });
+  }
+
+  private async onUpdatedAppCrashed(appId: string): Promise<void> {
+    const r = await this.updater.onCrashed(appId);
+    if (!r.rolledBack) return;
+    const back = await this.updater.current(appId);
+    const ref = back ? serverRef(back) : this.builtins.get(appId);
+    this.pendingBundles.delete(appId);
+    if (ref) {
+      this.bundles.set(appId, ref);
+      this.lifecycle.register(ref);
+    }
+    showToast(`${ref?.manifest.name ?? appId} ${r.from} kept crashing, so it was rolled back to ${r.to ?? 'the built-in version'}.`, 'error', 8000);
   }
 
   private async subscribeRealtime(): Promise<void> {
@@ -269,6 +354,10 @@ export class Shell {
   statuses(fn: (s: readonly AppStatus[]) => void): () => void {
     return this.lifecycle.subscribe(fn);
   }
+}
+
+function serverRef(b: InstalledBundle): BundleRef {
+  return { manifest: b.manifest, source: 'server', base: `/installed/${b.manifest.id}/${b.manifest.version}/`, loadHtml: b.loadHtml };
 }
 
 export function syncStatus(r: Reachability): SyncStatus {
