@@ -32,7 +32,9 @@ powershell -ExecutionPolicy Bypass -File tools\install-windows.ps1
 
 1. Download the APK from the GitHub Release (or the CI `superapp-debug-apk` artifact) and install it (`adb install` or the Android installer).
 2. First run: server URL `https://<minipc>.<tailnet>.ts.net`, sign in, the phone registers itself in `core_devices`.
-3. **Safe mode:** Settings → Safe mode, if a subapp misbehaves at start.
+3. **Keep Tailscale connected:** Android can drop the Tailscale VPN (seen after airplane mode on 2026-11-28). Turn on Settings → Network → VPN → Tailscale → **Always-on VPN**. If the header shows `Offline` while Wi-Fi works, open the Tailscale app first; queued changes are kept and sync when it reconnects.
+4. **Installing builds:** `adb install -r app-debug.apk` updates in place (debug builds share one signing key since 7f1fc2b).
+5. **Safe mode:** Settings → Safe mode, if a subapp misbehaves at start.
 
 ## 3. Health checks and SLOs (proposed)
 
