@@ -69,6 +69,25 @@ function keyDateItem(kd, person, today) {
   };
 }
 
+/**
+ * The contacts_reach_out view's due date, computed in JS so hooks need not query the view:
+ * next_touch if set, else (latest of last_touch and the newest logged interaction) + cadence_days.
+ * person: { id, display_name, next_touch, last_touch, cadence_days }, lastInteraction: 'YYYY-MM-DD' | ''
+ */
+function reachRow(person, lastInteraction, isGhost) {
+  var next = parseYmd(person.next_touch) ? person.next_touch : null;
+  var last = [person.last_touch, lastInteraction].filter(function (d) {
+    return !!parseYmd(d);
+  }).sort().pop() || null;
+  var due = next;
+  var cadence = Number(person.cadence_days) || 0;
+  if (!due && last && cadence > 0) {
+    var d = parseYmd(last);
+    due = ymd(new Date(d.getFullYear(), d.getMonth(), d.getDate() + cadence));
+  }
+  return { id: person.id, display_name: person.display_name, due_on: due, is_ghost: !!isGhost };
+}
+
 /** row: a contacts_reach_out view row { id, display_name, due_on, is_ghost } → core_agenda fields or null. */
 function reachOutItem(row) {
   if (!row || row.is_ghost || !parseYmd(row.due_on)) return null;
@@ -181,11 +200,22 @@ function syncReachOut(app, hash, personId) {
     return;
   }
   var owner = person.getString("owner");
-  var row;
-  try {
-    row = JSON.parse(JSON.stringify(app.findRecordById("contacts_reach_out", personId).publicExport()));
-  } catch (_) {
-    row = null; // deleted person or no longer in the view
+  var row = null;
+  if (!person.getBool("deleted")) {
+    var entity = person.getString("entity");
+    var ghost;
+    try {
+      var ent = app.findRecordById("contacts_entities", entity);
+      ghost = ent.getBool("is_ghost") || ent.getBool("deleted");
+    } catch (_) {
+      ghost = true;
+    }
+    var latest = app.findRecordsByFilter("contacts_interactions", "entity = {:e} && deleted = false && kind != 'Created'", "-occurred_on", 1, 0, { e: entity });
+    row = reachRow(
+      { id: personId, display_name: person.getString("display_name"), next_touch: person.getString("next_touch"), last_touch: person.getString("last_touch"), cadence_days: person.getInt("cadence_days") },
+      latest.length ? latest[0].getString("occurred_on") : "",
+      ghost,
+    );
   }
   var key = "contacts:reach_out:" + personId;
   upsert(app, "core_agenda", projectedId(hash, owner, key), owner, reachOutItem(row), AGENDA_FIELDS);
@@ -211,6 +241,7 @@ module.exports = {
   nextOccurrence: nextOccurrence,
   keyDateItem: keyDateItem,
   reachOutItem: reachOutItem,
+  reachRow: reachRow,
   eatwellGlance: eatwellGlance,
   projectedId: projectedId,
   syncKeyDate: syncKeyDate,

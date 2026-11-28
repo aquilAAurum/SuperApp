@@ -8,6 +8,7 @@ const lib = require('../../pb_hooks/lib/agenda-core.js') as {
   nextOccurrence(kd: Record<string, unknown>, today: Date): Date | null;
   keyDateItem(kd: Record<string, unknown>, person: { id: string; display_name: string } | null, today: Date): Record<string, unknown> | null;
   reachOutItem(row: Record<string, unknown> | null): Record<string, unknown> | null;
+  reachRow(person: Record<string, unknown>, lastInteraction: string, ghost: boolean): Record<string, unknown>;
   eatwellGlance(date: string, entries: unknown[], water: unknown[], settings: unknown): Record<string, unknown>;
   projectedId(hash: (s: string) => string, owner: string, key: string): string;
 };
@@ -40,6 +41,15 @@ describe('reach-out → core_agenda', () => {
   it('creates a due task with a deep link to the person', () => {
     expect(lib.reachOutItem({ id: 'p1', display_name: 'Ada', due_on: '2026-11-30', is_ghost: false })).toMatchObject({ kind: 'task', title: 'Reach out to Ada', start: '2026-11-30', priority: 1, person: 'p1', deep_link: 'superapp://contacts/person/p1' });
   });
+  it('computes the due date like the contacts_reach_out view', () => {
+    const p = { id: 'p1', display_name: 'Ada', next_touch: '', last_touch: '2026-10-01', cadence_days: 30 };
+    expect(lib.reachRow(p, '', false).due_on).toBe('2026-10-31');
+    expect(lib.reachRow(p, '2026-11-10', false).due_on).toBe('2026-12-10');
+    expect(lib.reachRow({ ...p, next_touch: '2026-12-01' }, '2026-11-10', false).due_on).toBe('2026-12-01');
+    expect(lib.reachRow({ ...p, cadence_days: 0 }, '', false).due_on).toBeNull();
+    expect(lib.reachRow({ ...p, last_touch: '' }, '', true)).toMatchObject({ due_on: null, is_ghost: true });
+  });
+
   it('removes the item when there is no due date or the person is a ghost', () => {
     expect(lib.reachOutItem({ id: 'p1', display_name: 'Ada', due_on: null })).toBeNull();
     expect(lib.reachOutItem({ id: 'p1', display_name: 'Ada', due_on: '2026-11-30', is_ghost: true })).toBeNull();
