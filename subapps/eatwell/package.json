@@ -1,0 +1,20 @@
+{
+  "name": "@superapp/subapp-eatwell",
+  "version": "0.1.0",
+  "private": true,
+  "description": "EatWell: food diary with a daily calorie budget, macros, water and weight, plus activity from Health Connect (SA-2026-008).",
+  "license": "UNLICENSED",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && node ../../tools/pack.mjs . --builtin ../../apps/shell/public",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@superapp/sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "vite": "^8.3.8",
+    "vite-plugin-singlefile": "^2.3.4"
+  }
+}

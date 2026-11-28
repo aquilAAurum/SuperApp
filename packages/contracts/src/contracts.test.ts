@@ -10,6 +10,7 @@ import {
   sdkSatisfies,
   validateManifest,
   type MethodName,
+  type MethodSpec,
 } from './index.ts';
 import { compileParamValidators } from './schemas.ts';
 
@@ -155,10 +156,11 @@ describe('methods', () => {
   });
 
   it('health writes need the write scope; reads only the read scope', () => {
-    expect(METHODS['device.health.read'].scopes({}, 'eatwell')).toEqual(['device.health.read']);
-    expect(METHODS['device.health.request'].scopes({ read: ['steps'] }, 'eatwell')).toEqual(['device.health.read']);
-    expect(METHODS['device.health.request'].scopes({ read: [], write: ['nutrition'] }, 'eatwell')).toEqual(['device.health.read', 'device.health.write']);
-    expect(METHODS['device.health.write'].scopes({}, 'eatwell')).toEqual(['device.health.write']);
+    const scopes = (m: MethodName, p: Record<string, unknown>) => (METHODS[m] as MethodSpec).scopes(p, 'eatwell');
+    expect(scopes('device.health.read', {})).toEqual(['device.health.read']);
+    expect(scopes('device.health.request', { read: ['steps'] })).toEqual(['device.health.read']);
+    expect(scopes('device.health.request', { read: [], write: ['nutrition'] })).toEqual(['device.health.read', 'device.health.write']);
+    expect(scopes('device.health.write', {})).toEqual(['device.health.write']);
     expect(isKnownScope('device.health.read')).toBe(true);
     expect(validateManifest({ ...goodManifest, scopes: { required: ['data.own'], optional: ['device.health.read', 'device.health.write'] } }).ok).toBe(true);
   });

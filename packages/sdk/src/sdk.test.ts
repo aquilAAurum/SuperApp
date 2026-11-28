@@ -143,7 +143,7 @@ describe('device.health (standalone)', () => {
     const after = await sa.device.health.read(['steps'], start, end);
     expect(after.missing).toEqual([]);
     expect(after.buckets).toHaveLength(3);
-    expect(after.buckets[0].values.steps).toBeGreaterThan(0);
+    expect(after.buckets[0]?.values.steps).toBeGreaterThan(0);
     const w = await sa.device.health.write([{ type: 'weight', clientId: 'w1', time: isoLocal(end), kg: 80 }]);
     expect(w).toEqual({ written: 0, missing: ['weight'] });
   });
