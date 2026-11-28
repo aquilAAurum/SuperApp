@@ -9,7 +9,7 @@ To: Nick
 ### 1. Sprint Goal
 "Ship M1 (Foundations) and M2 (Shell and bridge): a sideloadable debug APK whose `hello` subapp completes a verified handshake, with every gate running in CI." (D01)
 
-**Result: Met in CI; not yet verified on the phone.** The debug APK is built on every push and the handshake is verified in browser E2E. The on-phone timing (KPI 1) is pending (D10 R-5). Scope grew mid-sprint to include M3, which is also met in CI.
+**Result: Met.** Verified in CI and, on 2026-11-28, on the owner's phone against the mini PC: handshake 45/47/27 ms, offline sync, encryption at rest (D10). Scope grew mid-sprint to include M3, which is also met.
 
 ### 2. Delivered
 | Feature | State | Evidence |
@@ -22,7 +22,7 @@ To: Nick
 ### 3. KPI status (Profile §1)
 | KPI | Status | Evidence |
 | :-- | :-- | :-- |
-| 1. Handshake < 500 ms on phone | Browser ✅, phone pending | E2E; D10 R-5 |
+| 1. Handshake < 500 ms on phone | ✅ 45/47/27 ms on device | D10 R-5 |
 | 2. Zero lost / duplicated writes | ✅ (browser + unit) | `sync.spec.ts`, `sync.test.ts` |
 | 3. Every rejected call logged | ✅ | `router.test.ts`, `handshake.test.ts` |
 | 4. No integration secret on phone | ✅ server rules (M6 proxies pending) | integration "integration secrets are never readable by clients" |
@@ -39,7 +39,7 @@ To: Nick
 | D07 | Integration report | Verified at bfdb2a2 | `D07_Integration_Report.md` |
 | D08 | Peer review | PASS with follow-ups (self-review, needs independent reviewer) | `D08_Peer_Review.md` |
 | D09 | Test plan | Done | `D09_Test_Plan.md` |
-| D10 | QA report | Automated PASS; release gate BLOCKER (manual checks) | `D10_QA_Test_Report.md` |
+| D10 | QA report | PASS (automated + device run 2026-11-28) | `D10_QA_Test_Report.md` |
 | D11 | CVH | FAIL (evidence incomplete) | `D11_CVH_Report.md` |
 | D12 | Release record | Not produced: no release this sprint | — |
 | D13 | Sprint review | This document | |
@@ -54,7 +54,7 @@ To: Nick
 ### 5. Next steps (owner)
 1. Make `main` the default branch; branch protection; secret scanning (Nick, D07 §D).
 2. Independent D08 review on PR #6 (second reviewer), then Nick merges (`7_CEO_REVIEW`).
-3. Run D10 M-1…M-4 on the phone (Russ with Nick).
+3. ~~Run D10 M-1…M-4 on the phone~~ Done 2026-11-28 (all PASS).
 4. Release dry-run `v0.1.0-rc.1`: keystore in the `release` environment, rollback and restore tests (Theo) → re-run MRB.
 5. D08 follow-ups J-3…J-6 and M3 follow-ups (integrity check, *Edit*) before M4.
 

@@ -15,6 +15,6 @@
 | 2026-11-22 | PR #6 | Opened → `state:4_INTEGRATION` | D07 (green at bfdb2a2) | Head re-run pending |
 | 2026-11-22 | SA-2026-001/002/003 | Review findings J-1, J-2 fixed | commit 43075c6 | D08 |
 | 2026-11-27 | Mini PC | PocketBase installed with `tools/install-windows.ps1`; Tailscale Serve on | Owner output in session | Installer fixes: corepack on Node 26 (a00722a) |
-| 2026-11-28 | Device run | M-2, M-3, M-4 PASS; M-1 1/3 (45 ms) | D10 R-5…R-13 | Findings: status-bar overlap (fixed 5efd3b4), debug key per CI run (fixed 7f1fc2b), Tailscale drop after airplane mode (runbook) |
+| 2026-11-28 | Device run | M-1 (45/47/27 ms), M-2, M-3, M-4 PASS → D10 PASS | D10 R-5…R-13 | Findings: status-bar overlap (fixed 5efd3b4), debug key per CI run (fixed 7f1fc2b), Tailscale drop after airplane mode (runbook) |
 | next | PR #6 | `5_REVIEW` when head CI green and a second reviewer submits D08 | — | Author cannot approve own PR |
 | next | Candidate | `6.5_MRB_HARDENING` blocked | D11 FAIL (evidence incomplete) | Needs M-1, M-2, HB-SEC-02, CodeQL run, release dry-run |

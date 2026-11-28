@@ -15,7 +15,7 @@ To: Janus
 | Evidence | https://github.com/aquilAAurum/SuperApp/actions/runs/44964342040 (all four CI jobs green) |
 
 ### B. Summary
-**Final Status: BLOCKER** for the release gate (`6.5`), now only on M-1's two remaining handshake readings. Device run 2026-11-28 on the owner's Android phone (WebView 158, Tailscale to the mini PC): M-2, M-3 and M-4 PASS, isolation and scope denial PASS, first handshake 45 ms. All automated cases PASS.
+**Final Status: PASS.** All automated cases PASS, and the device run on 2026-11-28 on the owner's Android phone (Pixel 10 Pro XL, WebView 158, Tailscale to the mini PC) passed every critical manual check: M-1 handshake 45/47/27 ms, M-2 database encrypted, M-3 offline sync with no loss or duplicates, M-4 Back navigation, sandbox isolation and scope denial. One Medium finding (R-12) is tracked as a follow-up.
 **Issues found:** 0 open automated failures. 7 defects were found by tests during the sprint and fixed (see `docs/evals/`).
 
 ### C. Learning & Preference Signal
@@ -31,7 +31,7 @@ To: Janus
 | R-2 | E2E (14 tests incl. axe) | HB-QUAL-03, HB-A11Y-01 | all pass, 0 axe violations | pass | — | CI job "E2E + accessibility" |
 | R-3 | PocketBase integration (9 tests) | AC-1.1, AC-1.2, T-10, T-12 | all pass on real PocketBase 0.34.2 | pass (after 2 fixes) | — | CI job "PocketBase integration" |
 | R-4 | Android build | Writer Deploys | debug APK produced | produced | — | artifact `superapp-debug-apk` |
-| R-5 | AC-2.2 on device | KPI 1 | < 500 ms on 3 cold launches | **45 ms** on the first reading; 2 more pending | Critical | M-1, Diagnostics → Apps (owner screenshot 2026-11-28) |
+| R-5 | AC-2.2 on device | KPI 1 | < 500 ms on 3 cold launches | **PASS**: 45 ms, 47 ms, 27 ms (each after removing the app from recents) | Critical | M-1, Diagnostics → Apps (owner screenshot 2026-11-28) |
 | R-6 | AC-3.4 on device | HB-DATA-02 | DB unreadable without key | **PASS**: first 16 bytes `81 ac 92 46 12 ea 6c e0 b6 62 e5 b2 2c 22 7f 21` (plain SQLite would start `SQLite format 3`) | Critical | M-2, `adb shell run-as … head -c 16 … \| od` |
 | R-8 | Offline sync on device | AC-3.1 | Offline writes survive and sync on reconnect | **PASS**: 105 notes written in airplane mode (5 + 100), 1 edit; outbox 105 → 0 after reconnect, nothing in Needs attention. Server: `hello_notes` total 106 (the offline batch plus notes added after reconnect), every record `owner` = owner, `origin_device` = Pixel 10 Pro XL; the twice-edited note at `version` 3; outbox 0 | Critical | M-3 (owner screenshots 2026-11-28) |
 | R-9 | Back navigation on device | SA-U4 | Back returns to launcher | **PASS** | High | M-4 (owner report) |

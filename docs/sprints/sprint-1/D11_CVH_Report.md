@@ -10,7 +10,7 @@ To: Janus → Nick
 | Section | Owner | Status | Evidence |
 | :-- | :-- | :-- | :-- |
 | Security / Red Team | Mara | Partial | Threat model T-01…T-19 each mapped to a test; red-team E2E (forged handshake, sandbox escape probes) green. CodeQL results from the new Advanced setup not yet seen. Secret scanning not enabled. |
-| Non-functional QA & a11y | Russ | Partial | D10: automated PASS; device run M-2/M-3/M-4 PASS, M-1 1 of 3 readings (45 ms); no endurance test yet (shell is not long-running server software, 48 h test not applicable) |
+| Non-functional QA & a11y | Russ | PASS | D10 PASS: automated and device run (M-1 45/47/27 ms, M-2, M-3, M-4); no endurance test yet (shell is not long-running server software, 48 h test not applicable) |
 | Legal / Privacy / Licence | Priya | PASS with notes | D18 |
 | Commercial viability | Qz | PASS | Personal system: cost = mini PC power + Tailscale free tier; no per-user cost. Go-to-market: n/a (sideloaded, single owner) |
 | Operational readiness | Theo | Partial | Runbook draft (`docs/runbook.md`); no release dry-run (no tag yet); backup/restore not tested; signing keystore not configured |
@@ -35,6 +35,6 @@ To: Janus → Nick
 | HB-LEG-01 | PASS | dependency-review licence policy; D18 |
 | HB-LEG-02 | N/A | Not distributed |
 
-**To reach PASS:** finish M-1 (two more readings, Russ), confirm HB-SEC-02 and the first CodeQL Advanced run (Nick/Mara), and a release dry-run with rollback (Theo). Each is listed in D13 next steps.
+**To reach PASS:** confirm HB-SEC-02 and the first CodeQL Advanced run (Nick/Mara), and a release dry-run with rollback (Theo). Each is listed in D13 next steps.
 
 From: MRB (Mara, Russ, Priya, Qz, Theo)
