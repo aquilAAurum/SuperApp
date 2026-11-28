@@ -50,12 +50,14 @@ for (const c of ["eatwell_entries", "eatwell_water"]) {
   }, c);
 }
 
-// Full rebuild: on every server start (fills Today from data that predates it or came from a
-// restore), nightly after midnight local time (recurring dates roll forward), and on demand.
-// Handlers cannot see top-level functions in this file (JSVM isolation), so the logic is in lib.
-onServe((e) => {
-  require(`${__hooks}/lib/agenda-core.js`).rebuildLogged(e.app, (s) => $security.md5(s), "startup");
-  return e.next();
+// Full rebuild: once within a minute of each server start (fills Today from data that predates it
+// or came from a restore), nightly after midnight local time (recurring dates roll forward), and on
+// demand. JSVM has no onServe hook, so the startup run is a per-minute cron guarded by the app's
+// in-memory store (cleared on restart). Handlers cannot see top-level functions here, so logic is in lib.
+cronAdd("agenda_rebuild_startup", "* * * * *", () => {
+  if ($app.store().has("agenda.rebuilt")) return;
+  $app.store().set("agenda.rebuilt", true);
+  require(`${__hooks}/lib/agenda-core.js`).rebuildLogged($app, (s) => $security.md5(s), "startup");
 });
 
 cronAdd("agenda_rebuild", "7 0 * * *", () => {

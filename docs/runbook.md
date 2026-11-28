@@ -49,7 +49,7 @@ The task runs as the signed-in user (uses the checkout's existing git credential
 
 ### 1.2 Today projections (ADR-011)
 
-Today's agenda items and glance cards are projected from Contacts and EatWell on every write, and also rebuilt in full on each PocketBase start, nightly at 00:07 local time, and on demand. The log line is `agenda.rebuilt` with counts. To rebuild now (e.g. after restoring a backup), sign in to the admin UI and run, with a superuser token:
+Today's agenda items and glance cards are projected from Contacts and EatWell on every write, and also rebuilt in full within a minute of each PocketBase start, nightly at 00:07 local time, and on demand. The log line is `agenda.rebuilt` with counts. To rebuild now (e.g. after restoring a backup), sign in to the admin UI and run, with a superuser token:
 
 ```powershell
 Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8090/api/sa/agenda/rebuild -Headers @{ Authorization = "<superuser token>" }
