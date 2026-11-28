@@ -27,7 +27,7 @@
 </script>
 
 <header class="bar">
-  <h1>Super app</h1>
+  <h1>~Supra~</h1>
   <button type="button" class="sync" data-testid="sync-status" data-state={$syncState.label} onclick={() => onNavigate('sync')} aria-label={`Sync status: ${syncLabel}. ${$syncState.detail} Open Sync centre.`}>
     <span class="dot" aria-hidden="true"></span>{syncLabel}
   </button>

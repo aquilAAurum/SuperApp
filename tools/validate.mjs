@@ -28,6 +28,11 @@ for (const s of ['validate', 'lint', 'typecheck', 'test', 'build', 'test:e2e']) 
 const migrations = readdirSync(join(ROOT, 'server/pb_migrations')).filter((f) => f.endsWith('.js'));
 check('PocketBase migrations committed', migrations.length > 0, `${migrations.length} file(s)`);
 
+// ADR-009: what the mini PC pulls must be intact (hash, manifest, zip contents agree).
+const { checkPublished } = await import('./published-lib.mjs');
+const publishedProblems = checkPublished(join(ROOT, 'published'));
+check('published/ subapp bundles are intact', publishedProblems.length === 0, publishedProblems.slice(0, 3).join('; '));
+
 const cap = read('apps/shell/capacitor.config.ts');
 check('WebView debugging disabled in release config', /webContentsDebuggingEnabled:\s*false/.test(cap));
 check('Capacitor serves the shell over https scheme', /androidScheme:\s*'https'/.test(cap));

@@ -16,7 +16,8 @@
     "test": "vitest run",
     "build": "pnpm --filter @superapp/sdk build && pnpm --filter @superapp/sdk size && pnpm --filter @superapp/shell build",
     "test:e2e": "pnpm --filter @superapp/shell test:e2e",
-    "check": "pnpm validate && pnpm lint && pnpm typecheck && pnpm test"
+    "check": "pnpm validate && pnpm lint && pnpm typecheck && pnpm test",
+    "publish:subapp": "node tools/publish-subapp.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

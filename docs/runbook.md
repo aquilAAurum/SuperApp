@@ -26,7 +26,19 @@ powershell -ExecutionPolicy Bypass -File tools\install-windows.ps1
 - **Owner account:** in the admin UI (`http://127.0.0.1:8090/_/`), create the owner in `users`.
 - **Integrations (M6):** add Home Assistant, Jellyfin and Anthropic entries in `core_integrations` via the admin UI only. Never put these values in the repo or on the phone.
 - **Windows:** disable sleep; BIOS "restore on AC power loss"; Windows Update active hours with restarts at 04:00.
-- **Later deploys:** `pwsh tools/deploy-server.ps1` (copies migrations and hooks, restarts the service).
+- **Later deploys:** `powershell -ExecutionPolicy Bypass -File tools\deploy-server.ps1` (copies migrations and hooks, restarts the service).
+
+### 1.1 Subapp updates (ADR-009)
+
+One-time, on the mini PC, in Windows PowerShell **as Administrator** (deploy restarts the PocketBase service), from the SuperApp checkout on `main` after the PR is merged (`git switch main; git pull --ff-only`). PowerShell 7 (`pwsh`) is not needed:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\deploy-server.ps1          # installs the subapps hook and protected-bundle migration
+powershell -ExecutionPolicy Bypass -File tools\sync-subapps.ps1           # first pull + copy now
+powershell -ExecutionPolicy Bypass -File tools\sync-subapps.ps1 -Register # then every 15 minutes (scheduled task "Supra subapp sync")
+```
+
+The task runs as the signed-in user (uses the checkout's existing git credentials). Check it: Task Scheduler → *Supra subapp sync* → Last Run Result; PocketBase logs show `subapps.imported` / `subapps.import_rejected`. On the phone, Settings → Subapps shows each app's version and source; *Check for updates* pulls now.
 
 ## 2. Phone
 

@@ -1,3 +1,7 @@
+import { createHash } from 'node:crypto';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { zipSync } from 'fflate';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 const PB = process.env.PB_URL ?? 'http://127.0.0.1:8090';
@@ -169,5 +173,60 @@ describe('access rules', () => {
     const view = await api(`/api/collections/core_integrations/records/${c.body.id}`, { token: user });
     expect(view.status).toBeGreaterThanOrEqual(403);
     expect(JSON.stringify([list.body, view.body])).not.toContain('sk-test-secret');
+  });
+});
+
+describe('published subapps (ADR-009)', () => {
+  // Must be the inbox of the server under test: <hooksDir>/../subapps_inbox (server/subapps_inbox in the
+  // Linux job; the Windows job sets SUPRA_SUBAPPS_INBOX to the installed copy's inbox).
+  const inbox = `${process.env.SUPRA_SUBAPPS_INBOX ?? fileURLToPath(new URL('../../subapps_inbox', import.meta.url))}/`;
+  const id = `itest${Date.now().toString(36)}`.slice(0, 20);
+  const m = (version: string) => ({ id, name: 'Itest', version, sdk: '>=1.0 <2.0', entry: 'index.html', formFactors: ['phone'], scopes: { required: [], optional: [] }, collections: [], events: { emits: [], listens: [] }, deepLinks: [], intents: [], car: null, background: { tasks: [] } });
+  const put = (version: string, opts: { sha?: string; manifestId?: string } = {}) => {
+    const zip = zipSync({ 'app.json': new TextEncoder().encode(JSON.stringify(m(version))), 'index.html': new TextEncoder().encode(`<p>${version}</p>`) });
+    const sha = createHash('sha256').update(zip).digest('hex');
+    const dir = `${inbox}${id}`;
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(`${dir}/${id}-${version}.zip`, zip);
+    writeFileSync(`${dir}/${id}-${version}.zip.sha256`, `${opts.sha ?? sha}  ${id}-${version}.zip\n`);
+    writeFileSync(`${dir}/${id}-${version}.json`, JSON.stringify({ ...m(version), id: opts.manifestId ?? id }));
+    return { zip, sha };
+  };
+
+  it('imports new bundles from the inbox once, refuses bad ones, and serves zips only with a file token', async () => {
+    const good = put('1.0.0');
+    put('1.0.1', { manifestId: 'someoneelse' });
+    put('not-a-version');
+    try {
+      const denied = await api('/api/sa/subapps/import', { method: 'POST', token: user });
+      expect(denied.status).toBeGreaterThanOrEqual(401); // owner token is not a superuser
+      const r = await api('/api/sa/subapps/import', { method: 'POST', token: su });
+      expect(r.status).toBe(200);
+      // Other bundles may share the inbox (the Windows job syncs published/ first); check only ours.
+      expect(r.body.imported.filter((x: string) => x.startsWith(`${id}@`))).toEqual([`${id}@1.0.0`]);
+      expect(r.body.errors.filter((e: { path: string }) => e.path.startsWith(`${id}/`)).map((e: { reason: string }) => e.reason).sort()).toEqual(['manifest id/version/entry do not match the file name', 'version not-a-version is not semantic (1.2.3)']);
+      const again = await api('/api/sa/subapps/import', { method: 'POST', token: su });
+      expect(again.body.imported.filter((x: string) => x.startsWith(`${id}@`))).toEqual([]);
+
+      const list = await api(`/api/collections/subapps/records?filter=${encodeURIComponent(`appId = "${id}"`)}`, { token: user });
+      expect(list.status).toBe(200);
+      expect(list.body.items).toHaveLength(1);
+      const rec = list.body.items[0];
+      expect(rec).toMatchObject({ appId: id, version: '1.0.0', sha256: good.sha, channel: 'stable' });
+      const anon = await api(`/api/collections/subapps/records?filter=${encodeURIComponent(`appId = "${id}"`)}`);
+      expect(anon.body.items ?? []).toHaveLength(0);
+
+      const fileUrl = `${PB}/api/files/subapps/${rec.id}/${rec.bundle}`;
+      expect((await fetch(fileUrl)).status).toBe(404); // protected field: no token, no file
+      const tok = await api('/api/files/token', { method: 'POST', token: user });
+      const dl = await fetch(`${fileUrl}?token=${tok.body.token}`);
+      expect(dl.status).toBe(200);
+      expect(createHash('sha256').update(new Uint8Array(await dl.arrayBuffer())).digest('hex')).toBe(good.sha);
+
+      const write = await api('/api/collections/subapps/records', { token: user, body: { appId: id, version: '9.9.9' } });
+      expect(write.status).toBeGreaterThanOrEqual(400); // clients cannot publish
+    } finally {
+      rmSync(`${inbox}${id}`, { recursive: true, force: true });
+    }
   });
 });

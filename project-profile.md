@@ -8,6 +8,7 @@ Everything product-specific lives here; Core personas read these values. A Profi
 
 | Field | Value |
 | :--- | :--- |
+| **Name** | **~Supra~** (launcher title, Android app label, page title; renamed from "Super app" by Nick 2026-11-28). The Android package id `dev.superapp.shell` and code names (`superapp`, `@superapp/*`) are unchanged so updates install over the existing app and keep its data. |
 | **Product** | A personal Android "super app": one sideloaded shell APK that hosts, launches and connects small web subapps, backed by a self-hosted PocketBase server on a Windows 11 mini PC that is the single source of truth. Single owner. |
 | **Brand promise** | **One door, no surprises.** Every app behind one login; nothing lost, nothing hidden: sync state and errors are always visible. |
 | **Magic moment** | From tapping the shell icon to using any subapp, signed in, in under 2 seconds, with no extra login. |

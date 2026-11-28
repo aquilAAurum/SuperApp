@@ -1,6 +1,6 @@
 # Writing a subapp
 
-A subapp is a static web bundle plus `app.json`, hosted by the shell in a sandboxed iframe. It reaches everything (data, device, other apps, integrations) through `@superapp/sdk`. See `subapps/hello` for a complete example.
+A subapp is a static web bundle plus `app.json`, hosted by the shell in a sandboxed iframe. It reaches everything (data, device, other apps, integrations) through `@superapp/sdk`. See `subapps/hello` for a complete example, and `subapps/contacts` for a larger one (paged reads past the 500-row `subscribe` window, forms, a canvas view).
 
 ## Rules (lint- and shell-enforced)
 
@@ -31,6 +31,14 @@ node tools/pack.mjs subapps/<app>    # validates app.json, writes release/<id>-<
 ```
 
 Upload to the server `subapps` collection arrives with the App manager (M5). Until then, reference apps are built into the shell with `--builtin apps/shell/public`.
+
+## Publish an update (no APK, ADR-009)
+
+1. Bump `version` in `app.json` and `package.json` (published versions are immutable and must increase).
+2. `pnpm publish:subapp <id>`: builds and writes `published/<id>/<id>-<version>.zip`, `.zip.sha256`, `.json`.
+3. Commit `published/` with the source change and open a PR. When Nick merges to `main`, the mini PC pulls it within 15 minutes and phones install it on their next check (Settings → *Check for updates* to pull now). It applies the next time the app starts; two crashes within 60 s roll it back.
+
+Shell, bridge or Android changes still need a new APK.
 
 ## Migrating an existing vibe-coded app
 

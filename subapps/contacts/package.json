@@ -1,0 +1,20 @@
+{
+  "name": "@superapp/subapp-contacts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Supra Contacts: reach-out queue, people search, contact cards and the network graph over the contacts_* collections (SA-2026-007).",
+  "license": "UNLICENSED",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && node ../../tools/pack.mjs . --builtin ../../apps/shell/public",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@superapp/sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "vite": "^8.3.8",
+    "vite-plugin-singlefile": "^2.3.4"
+  }
+}

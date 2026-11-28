@@ -7,9 +7,14 @@ export function domFrameFactory(container: () => HTMLElement, bundles: () => Map
   return async (app: { manifest: { id: string } }): Promise<FrameHandle> => {
     const ref = bundles().get(app.manifest.id);
     if (!ref) throw new Error(`No bundle for ${app.manifest.id}`);
-    const res = await fetch(`${ref.base}${ref.manifest.entry}`, { cache: 'no-store' });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const srcdoc = buildSrcdoc({ html: await res.text(), nonce: newNonce(), bundleOrigin: location.origin, bundleBase: ref.base });
+    let html: string;
+    if (ref.loadHtml) html = await ref.loadHtml();
+    else {
+      const res = await fetch(`${ref.base}${ref.manifest.entry}`, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      html = await res.text();
+    }
+    const srcdoc = buildSrcdoc({ html, nonce: newNonce(), bundleOrigin: location.origin, bundleBase: ref.base });
 
     const iframe = document.createElement('iframe');
     iframe.setAttribute('sandbox', IFRAME_SANDBOX);
