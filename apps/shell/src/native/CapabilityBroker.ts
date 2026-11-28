@@ -5,15 +5,33 @@
  *   - the same shell runs on web (E2E, dev) and on other form factors with capabilities discovered,
  *     not assumed (spec principle "device-agnostic contracts").
  */
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, registerPlugin } from '@capacitor/core';
 import { App } from '@capacitor/app';
 import { Device } from '@capacitor/device';
+import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import { Network } from '@capacitor/network';
 import { Preferences } from '@capacitor/preferences';
 import { SecureStorage } from '@aparajita/capacitor-secure-storage';
 import { CapacitorSQLite, SQLiteConnection } from '@capacitor-community/sqlite';
-import type { Capabilities, FormFactor } from '@superapp/contracts';
+import type { Capabilities, FormFactor, HealthBucket, HealthReadMetric, HealthUnavailableReason, HealthWriteRecord, HealthWriteType } from '@superapp/contracts';
 import type { SqlDatabase } from '../sync/sqlite-kv.ts';
+import type { DevicePort, HealthPort } from '../bridge/device-handlers.ts';
+
+/**
+ * In-repo Kotlin plugin (apps/shell/android/app/src/main/java/dev/superapp/shell/HealthConnectPlugin.kt,
+ * ADR-010). Permission names are Health Connect's without the `android.permission.health.` prefix;
+ * the plugin refuses any name outside its fixed allow-list.
+ */
+interface HealthConnectNative {
+  status(): Promise<{ sdkStatus: 'available' | 'unavailable' | 'update_required'; granted: string[] }>;
+  requestHealthPermissions(o: { permissions: string[] }): Promise<{ granted: string[] }>;
+  aggregate(o: { metrics: HealthReadMetric[]; start: string; end: string; bucket: 'day' | 'none' }): Promise<{ buckets: HealthBucket[] }>;
+  insert(o: { records: HealthWriteRecord[] }): Promise<{ written: number }>;
+  delete(o: { type: HealthWriteType; clientIds: string[] }): Promise<{ deleted: number }>;
+  /** Health Connect's own settings (manage or revoke), or its Play Store page when it must be installed/updated. */
+  openSettings(): Promise<void>;
+}
+const HealthConnect = registerPlugin<HealthConnectNative>('HealthConnect');
 
 export interface DeviceSummary {
   name: string;
@@ -82,10 +100,13 @@ export class CapabilityBroker {
     return () => void h.remove();
   }
 
-  /** What exists on this hardware (not what any app is granted). */
+  /** What exists on this hardware (not what any app is granted). `health` is refreshed by health.status(). */
+  private healthAvailable = false;
+
   deviceCapabilities(): Capabilities['device'] {
     const native = this.isNative;
     return {
+      health: native && this.healthAvailable,
       location: native,
       contacts: native,
       haptics: native,
@@ -153,5 +174,34 @@ export class CapabilityBroker {
         await db.executeSet(set.map((x) => ({ statement: x.statement, values: x.values })), true);
       },
     };
+  }
+
+  // Health Connect (ADR-010). On web (dev, E2E) it reports unsupported.
+  readonly health: HealthPort = {
+    status: async () => {
+      if (!this.isNative) return { available: false, reason: 'unsupported' as HealthUnavailableReason, granted: [] };
+      const s = await HealthConnect.status();
+      this.healthAvailable = s.sdkStatus === 'available';
+      if (s.sdkStatus === 'available') return { available: true, granted: s.granted };
+      return { available: false, reason: (s.sdkStatus === 'update_required' ? 'update_required' : 'not_installed') as HealthUnavailableReason, granted: [] };
+    },
+    requestPermissions: async (permissions) => (await HealthConnect.requestHealthPermissions({ permissions })).granted,
+    aggregate: async (metrics, start, end, bucket) => (await HealthConnect.aggregate({ metrics, start, end, bucket })).buckets,
+    insert: async (records) => (await HealthConnect.insert({ records })).written,
+    delete: async (type, clientIds) => (await HealthConnect.delete({ type, clientIds })).deleted,
+  };
+
+  async openHealthSettings(): Promise<void> {
+    if (this.isNative) await HealthConnect.openSettings();
+  }
+
+  async haptics(style: 'light' | 'medium' | 'heavy'): Promise<void> {
+    if (!this.isNative) return;
+    await Haptics.impact({ style: style === 'heavy' ? ImpactStyle.Heavy : style === 'medium' ? ImpactStyle.Medium : ImpactStyle.Light });
+  }
+
+  /** The subset of the broker the device.* bridge handlers use. */
+  devicePort(): DevicePort {
+    return { health: this.health, haptics: (s) => this.haptics(s) };
   }
 }

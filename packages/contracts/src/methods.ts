@@ -6,6 +6,7 @@
  * Change this file first, then the SDK, then the shell handler (spec implementation note 1).
  */
 import { parseTopic } from './topics.ts';
+import { HEALTH_READ_METRICS, HEALTH_WRITE_TYPES, MEAL_TYPES } from './health.ts';
 
 export type JsonSchema = Record<string, unknown>;
 
@@ -28,6 +29,37 @@ const RECORD_ID = str(15, { pattern: '^[a-z0-9]{15}$' });
 const TOPIC = str(128, { pattern: '^[a-z][a-z0-9]*\\.[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$' });
 const DEVICE = str(15, { pattern: '^([a-z0-9]{15}|\\*)$' });
 const JSON_OBJECT: JsonSchema = { type: 'object' };
+
+// ISO 8601 instant with an explicit offset, e.g. 2026-11-28T07:30:00Z or 2026-11-28T07:30:00.000-05:00.
+const INSTANT = str(40, { pattern: '^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2}(\\.\\d{1,3})?)?(Z|[+-]\\d{2}:\\d{2})$' });
+const CLIENT_ID = str(64, { pattern: '^[A-Za-z0-9_-]+$' });
+const NUM = (max: number): JsonSchema => ({ type: 'number', minimum: 0, maximum: max });
+const READ_METRICS: JsonSchema = { type: 'array', items: { enum: [...HEALTH_READ_METRICS] }, minItems: 1, maxItems: HEALTH_READ_METRICS.length, uniqueItems: true };
+const WRITE_TYPES: JsonSchema = { type: 'array', items: { enum: [...HEALTH_WRITE_TYPES] }, maxItems: HEALTH_WRITE_TYPES.length, uniqueItems: true };
+const HEALTH_RECORD: JsonSchema = {
+  oneOf: [
+    obj(
+      {
+        type: { const: 'nutrition' },
+        clientId: CLIENT_ID,
+        start: INSTANT,
+        end: INSTANT,
+        name: str(100),
+        mealType: { enum: [...MEAL_TYPES] },
+        energyKcal: NUM(20_000),
+        proteinG: NUM(2000),
+        carbsG: NUM(2000),
+        fatG: NUM(2000),
+        fiberG: NUM(1000),
+        sugarG: NUM(2000),
+        sodiumMg: NUM(100_000),
+      },
+      ['type', 'clientId', 'start', 'end', 'energyKcal'],
+    ),
+    obj({ type: { const: 'weight' }, clientId: CLIENT_ID, time: INSTANT, kg: { type: 'number', minimum: 1, maximum: 1000 } }, ['type', 'clientId', 'time', 'kg']),
+    obj({ type: { const: 'hydration' }, clientId: CLIENT_ID, start: INSTANT, end: INSTANT, liters: NUM(100) }, ['type', 'clientId', 'start', 'end', 'liters']),
+  ],
+};
 
 const none = (): string[] => [];
 const fixed = (...scopes: string[]) => (): string[] => scopes;
@@ -127,6 +159,31 @@ export const METHODS = {
   'device.location': { params: obj({ highAccuracy: { type: 'boolean' } }), scopes: fixed('device.location'), since: 'M4' },
   'device.contacts.list': { params: obj({ query: str(100) }), scopes: fixed('device.contacts.read'), since: 'M4' },
   'device.haptics': { params: obj({ style: { enum: ['light', 'medium', 'heavy'] } }), scopes: fixed('device.haptics'), since: 'M4' },
+
+  // device.health: Health Connect (ADR-010). status needs the scope declared but no consent (it shows
+  // what the shell holds, so an app can offer "Connect"); request shows Health Connect's own dialog;
+  // read/write never show a dialog and report what is missing instead.
+  'device.health.status': { params: obj(), scopes: none, since: 'M4' },
+  'device.health.request': {
+    params: obj({ read: { ...READ_METRICS, minItems: 0 }, write: WRITE_TYPES }),
+    scopes: (p) => (Array.isArray(p.write) && p.write.length > 0 ? ['device.health.read', 'device.health.write'] : ['device.health.read']),
+    since: 'M4',
+  },
+  'device.health.read': {
+    params: obj({ metrics: READ_METRICS, start: INSTANT, end: INSTANT, bucket: { enum: ['day', 'none'] } }, ['metrics', 'start', 'end']),
+    scopes: fixed('device.health.read'),
+    since: 'M4',
+  },
+  'device.health.write': {
+    params: obj({ records: { type: 'array', items: HEALTH_RECORD, minItems: 1, maxItems: 100 } }, ['records']),
+    scopes: fixed('device.health.write'),
+    since: 'M4',
+  },
+  'device.health.delete': {
+    params: obj({ type: { enum: [...HEALTH_WRITE_TYPES] }, clientIds: { type: 'array', items: CLIENT_ID, minItems: 1, maxItems: 100 } }, ['type', 'clientIds']),
+    scopes: fixed('device.health.write'),
+    since: 'M4',
+  },
 
   // integrations (M6)
   'ha.states': { params: obj({ entityIds: { type: 'array', items: str(128), maxItems: 200 } }), scopes: fixed('home.read'), since: 'M6' },

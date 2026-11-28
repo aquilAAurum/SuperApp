@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { BridgeClient, BridgeError, StandaloneTransport, connect, type Transport } from './index.ts';
+import { BridgeClient, BridgeError, StandaloneTransport, connect, isoLocal, type Transport } from './index.ts';
 import type { RequestEnvelope, WelcomeMessage } from '@superapp/contracts/envelope';
 
 const welcome: WelcomeMessage = {
@@ -127,5 +127,28 @@ describe('data.subscribe (standalone)', () => {
     await sa.data.create('demo_items', { n: 2 });
     await new Promise((r) => setTimeout(r, 80));
     expect(seen).toEqual([0, 1]);
+  });
+});
+
+describe('device.health (standalone)', () => {
+  it('reports missing metrics until requested, then returns one bucket per local day', async () => {
+    const sa = connect({ appId: 'eatwell', transport: new StandaloneTransport('eatwell'), captureErrors: false });
+    await sa.ready;
+    const start = new Date(2026, 10, 25);
+    const end = new Date(2026, 10, 28);
+    const before = await sa.device.health.read(['steps'], start, end);
+    expect(before.missing).toEqual(['steps']);
+    const st = await sa.device.health.request({ read: ['steps'], write: ['nutrition'] });
+    expect(st.granted).toEqual({ read: ['steps'], write: ['nutrition'] });
+    const after = await sa.device.health.read(['steps'], start, end);
+    expect(after.missing).toEqual([]);
+    expect(after.buckets).toHaveLength(3);
+    expect(after.buckets[0]?.values.steps).toBeGreaterThan(0);
+    const w = await sa.device.health.write([{ type: 'weight', clientId: 'w1', time: isoLocal(end), kg: 80 }]);
+    expect(w).toEqual({ written: 0, missing: ['weight'] });
+  });
+
+  it('isoLocal keeps the local offset', () => {
+    expect(isoLocal(new Date(2026, 0, 2, 3, 4, 5))).toMatch(/^2026-01-02T03:04:05[+-]\d{2}:\d{2}$/);
   });
 });

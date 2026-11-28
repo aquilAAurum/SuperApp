@@ -1,0 +1,18 @@
+{
+  "id": "eatwell",
+  "name": "EatWell",
+  "version": "0.1.0",
+  "sdk": ">=1.1 <2.0",
+  "entry": "index.html",
+  "formFactors": ["phone", "tablet"],
+  "scopes": {
+    "required": ["data.own"],
+    "optional": ["device.health.read", "device.health.write", "device.haptics"]
+  },
+  "collections": ["eatwell_entries", "eatwell_foods", "eatwell_weights", "eatwell_water", "eatwell_settings"],
+  "events": { "emits": [], "listens": [] },
+  "deepLinks": [],
+  "intents": [],
+  "car": null,
+  "background": { "tasks": [] }
+}

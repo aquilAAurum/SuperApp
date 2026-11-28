@@ -37,7 +37,7 @@ describe('HandshakeGuard', () => {
     const s = setup();
     expect(s.guard.onWindowMessage({ source: s.frameWin, data: hello() })).toBe('connected');
     const w = s.frameWin.posted[0]!;
-    expect(w.message).toMatchObject({ type: 'welcome', apiVersion: '1.0', grantedScopes: ['data.own'] });
+    expect(w.message).toMatchObject({ type: 'welcome', apiVersion: '1.1', grantedScopes: ['data.own'] });
     expect((w.message as { sessionToken: string }).sessionToken).toMatch(/^[0-9a-f]{64}$/);
     expect(w.transfer).toEqual([{ tag: 'port2' }]);
     expect(s.router.hasSession('hello')).toBe(true);

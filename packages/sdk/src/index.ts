@@ -1,11 +1,13 @@
 import type { Capabilities } from '@superapp/contracts/capabilities';
 import type { WelcomeMessage } from '@superapp/contracts/envelope';
+import type { HealthReadMetric, HealthReadResult, HealthStatus, HealthWriteRecord, HealthWriteResult, HealthWriteType } from '@superapp/contracts/health';
 import { BridgeClient, PortTransport, type CallOptions, type HostWindow, type Transport } from './client.ts';
 import { StandaloneTransport } from './standalone.ts';
 
 export { BridgeClient, BridgeError, PortTransport, SDK_VERSION, type CallOptions, type Transport } from './client.ts';
 export { StandaloneTransport } from './standalone.ts';
 export type { Capabilities, WelcomeMessage };
+export type { HealthBucket, HealthReadMetric, HealthReadResult, HealthStatus, HealthWriteRecord, HealthWriteResult, HealthWriteType, HealthMealType } from '@superapp/contracts/health';
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
@@ -47,6 +49,28 @@ export interface SuperApp {
     /** A write from this app was dead-lettered or conflicted; the owner resolves it in the Sync centre. */
     onSyncFailed(handler: (e: { collection: string; recordId: string; status: 'dead' | 'conflict'; error: string | null }) => void): () => void;
   };
+  device: {
+    haptics(style?: 'light' | 'medium' | 'heavy'): Promise<void>;
+    /** Health Connect through the shell (ADR-010). Declare device.health.read / .write in app.json. */
+    health: {
+      /** Availability and the Health Connect permissions the shell holds. No consent sheet. */
+      status(): Promise<HealthStatus>;
+      /** Shows the shell consent sheet (first time) and then Health Connect's permission dialog. */
+      request(q: { read?: HealthReadMetric[]; write?: HealthWriteType[] }): Promise<HealthStatus>;
+      /** Aggregates per local day (bucket 'day', default) or over the whole range ('none'). */
+      read(metrics: HealthReadMetric[], start: Date | string, end: Date | string, bucket?: 'day' | 'none'): Promise<HealthReadResult>;
+      /** Upserts by clientId (use the app's record id, so edits replace instead of duplicating). */
+      write(records: HealthWriteRecord[]): Promise<HealthWriteResult>;
+      delete(type: HealthWriteType, clientIds: string[]): Promise<{ deleted: number }>;
+    };
+  };
+}
+
+/** ISO instant with the local offset, so day buckets follow the owner's clock, not UTC. */
+export function isoLocal(d: Date): string {
+  const p = (n: number) => String(Math.abs(n)).padStart(2, '0');
+  const off = -d.getTimezoneOffset();
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}${off >= 0 ? '+' : '-'}${p(Math.trunc(off / 60))}:${p(off % 60)}`;
 }
 
 function isFramed(): boolean {
@@ -113,6 +137,17 @@ export function connect(opts: ConnectOptions): SuperApp {
         };
       },
       onSyncFailed: (handler) => client.onEvent('data.sync_failed', (p) => handler(p as Parameters<typeof handler>[0])),
+    },
+    device: {
+      haptics: (style = 'light') => done(call('device.haptics', { style })),
+      health: {
+        status: () => call('device.health.status'),
+        request: (q) => call('device.health.request', q),
+        read: (metrics, start, end, bucket = 'day') =>
+          call('device.health.read', { metrics, start: typeof start === 'string' ? start : isoLocal(start), end: typeof end === 'string' ? end : isoLocal(end), bucket }),
+        write: (records) => call('device.health.write', { records }),
+        delete: (type, clientIds) => call('device.health.delete', { type, clientIds }),
+      },
     },
   };
 

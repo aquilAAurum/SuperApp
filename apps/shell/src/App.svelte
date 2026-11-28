@@ -7,6 +7,7 @@
   import Settings from './ui/Settings.svelte';
   import SyncCentre from './ui/SyncCentre.svelte';
   import Toasts from './ui/Toasts.svelte';
+  import ConsentSheet from './ui/ConsentSheet.svelte';
   import { showToast } from './ui/store.ts';
 
   const { shell }: { shell: Shell } = $props();
@@ -62,7 +63,13 @@
     });
     let offBack = () => {};
     let offResume = () => {};
-    void shell.broker.onBackButton(() => (view === 'home' ? undefined : goHome())).then((f) => (offBack = f));
+    // SA-U4: Back closes the topmost surface; an open consent sheet counts as "not now".
+    void shell.broker
+      .onBackButton(() => {
+        if (shell.consent.get()) shell.decideConsent('dismiss');
+        else if (view !== 'home') goHome();
+      })
+      .then((f) => (offBack = f));
     void shell.broker.onResume(() => void shell.refreshReachability()).then((f) => (offResume = f));
     shell
       .boot()
@@ -105,6 +112,7 @@
   </main>
 
   <section class="host" bind:this={host} hidden={view !== 'app'} aria-label="Running app" data-testid="subapp-host"></section>
+  <ConsentSheet {shell} />
   <Toasts />
 </div>
 

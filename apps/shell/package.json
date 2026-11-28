@@ -12,7 +12,7 @@
     "typecheck": "svelte-check --tsconfig ./tsconfig.json --fail-on-warnings",
     "test:e2e": "playwright test --trace off",
     "cap:sync": "cap sync android",
-    "build:builtins": "pnpm --workspace-concurrency=1 --filter @superapp/subapp-hello --filter @superapp/subapp-contacts build"
+    "build:builtins": "pnpm --workspace-concurrency=1 --filter @superapp/subapp-hello --filter @superapp/subapp-contacts --filter @superapp/subapp-eatwell build"
   },
   "dependencies": {
     "@aparajita/capacitor-secure-storage": "^8.0.1",
@@ -21,6 +21,7 @@
     "@capacitor/app": "^8.1.2",
     "@capacitor/core": "~8.6.2",
     "@capacitor/device": "^8.0.3",
+    "@capacitor/haptics": "^8.0.2",
     "@capacitor/network": "^8.0.1",
     "@capacitor/preferences": "^8.0.1",
     "@superapp/contracts": "workspace:*",

@@ -1,5 +1,5 @@
 /** Bridge API version implemented by this contract. Minor = additive, major = breaking (spec §Bridge API). */
-export const API_VERSION = '1.0' as const;
+export const API_VERSION = '1.1' as const;
 export const API_MAJOR = 1 as const;
 /** Protocol envelope version carried in every message as `v`. */
 export const ENVELOPE_VERSION = 1 as const;

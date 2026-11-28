@@ -2,7 +2,7 @@ import { ENVELOPE_VERSION, DEFAULT_REQUEST_TIMEOUT_MS, HANDSHAKE_TIMEOUT_MS } fr
 import { isShellToApp, type EventEnvelope, type RequestEnvelope, type WelcomeMessage } from '@superapp/contracts/envelope';
 import type { BridgeErrorBody, ErrorCode } from '@superapp/contracts/errors';
 
-export const SDK_VERSION = '1.0.0';
+export const SDK_VERSION = '1.1.0';
 
 export class BridgeError extends Error {
   readonly code: ErrorCode;

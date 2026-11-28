@@ -1,6 +1,6 @@
 {
   "name": "@superapp/sdk",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "Subapp SDK for the Super app bridge API v1. Promise-based, typed, < 15 KB minified.",
   "license": "UNLICENSED",

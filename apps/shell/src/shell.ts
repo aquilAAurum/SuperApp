@@ -2,13 +2,14 @@
  * Composition root. Wires logger → router → handshake → lifecycle and exposes Svelte-compatible
  * stores to the UI. No domain features live here (spec: the shell is a platform).
  */
-import { API_VERSION, type Capabilities, METHODS, type MethodName } from '@superapp/contracts';
+import { API_VERSION, type Capabilities, type Manifest, METHODS, type MethodName } from '@superapp/contracts';
 import { log, type LogEntry } from './core/logger.ts';
 import { RingLog } from './core/observable.ts';
 import { BridgeRouter } from './bridge/router.ts';
 import { HandshakeGuard } from './bridge/handshake.ts';
-import { MemoryGrantStore, grantedScopes } from './bridge/permissions.ts';
+import { MemoryGrantStore, grantedScopes, type Decision } from './bridge/permissions.ts';
 import { coreHandlers } from './bridge/handlers.ts';
+import { deviceHandlers } from './bridge/device-handlers.ts';
 import { SubappLifecycle, type AppStatus } from './host/lifecycle.ts';
 import { domFrameFactory } from './host/frames.ts';
 import { loadBuiltinBundles, type BundleRef } from './host/bundles.ts';
@@ -27,6 +28,15 @@ import { showToast } from './ui/store.ts';
 export const SHELL_VERSION = __SHELL_VERSION__;
 
 export type SyncStatus = { label: 'Synced' | 'Offline' | 'Error'; detail: string };
+
+/** A consent sheet waiting for the owner (spec §Permissions grant flow, step 3). */
+export interface ConsentRequest {
+  appId: string;
+  appName: string;
+  scope: string;
+}
+
+const GRANTS_PREF = 'grants.v1';
 
 export interface ShellState {
   user: SignedInUser | null;
@@ -59,6 +69,10 @@ export class Shell {
     safeMode: false,
     theme: 'system',
   });
+  /** The consent sheet on screen (one at a time; further requests queue behind it). */
+  readonly consent: Writable<ConsentRequest | null> = writable<ConsentRequest | null>(null);
+  private consentQueue: { req: ConsentRequest; resolve: () => void }[] = [];
+  private consentPending = new Map<string, Promise<void>>();
   /** Set by the UI: called when an app asks to close or crashes while visible. */
   onAppClosed: (appId: string) => void = () => undefined;
 
@@ -108,13 +122,19 @@ export class Shell {
       deviceId: () => this.state.get().deviceId,
       onAuthError: () => void this.recoverAuth(),
     });
-    Object.assign(this.handlers, dataHandlers(this.sync));
+    Object.assign(this.handlers, dataHandlers(this.sync), deviceHandlers(this.broker.devicePort(), log));
     this.router = new BridgeRouter({
       logger: log,
       grants: this.grants,
       handlers: this.handlers,
-      onDetach: (appId) => this.sync.dropApp(appId),
+      onDetach: (appId) => {
+        this.sync.dropApp(appId);
+        this.grants.endSession(appId);
+        this.dismissConsent(appId);
+      },
+      requestConsent: (appId, manifest, scope) => this.askConsent(appId, manifest, scope),
     });
+    this.cleanups.push(this.grants.onChange(() => void this.broker.setPref(GRANTS_PREF, JSON.stringify(this.grants.toJSON())).catch(() => undefined)));
     this.handshake = new HandshakeGuard({
       router: this.router,
       createChannel: () => {
@@ -164,7 +184,14 @@ export class Shell {
   }
 
   async boot(): Promise<'setup' | 'home'> {
-    const [url, safe, theme] = await Promise.all([this.broker.getPref('serverUrl'), this.broker.getPref('safeMode'), this.broker.getPref('theme')]);
+    const [url, safe, theme, grants] = await Promise.all([this.broker.getPref('serverUrl'), this.broker.getPref('safeMode'), this.broker.getPref('theme'), this.broker.getPref(GRANTS_PREF)]);
+    try {
+      if (grants) this.grants.load(JSON.parse(grants));
+    } catch {
+      log.warn('grants.load_failed', {});
+    }
+    // Refreshes sys.capabilities().device.health; failures just leave it false.
+    void this.broker.health.status().catch(() => undefined);
     this.state.update((s) => ({ ...s, safeMode: safe === '1', theme: theme === 'light' || theme === 'dark' ? theme : 'system' }));
     for (const b of await loadBuiltinBundles(log)) {
       this.builtins.set(b.manifest.id, b);
@@ -349,6 +376,51 @@ export class Shell {
   async setTheme(theme: ShellState['theme']): Promise<void> {
     await this.broker.setPref('theme', theme);
     this.state.update((s) => ({ ...s, theme }));
+  }
+
+  // --- consent and permissions (spec §Permissions; M4 subset with ADR-010) ---
+
+  private askConsent(appId: string, manifest: Manifest, scope: string): Promise<void> {
+    const key = `${appId}\u0000${scope}`;
+    const existing = this.consentPending.get(key);
+    if (existing) return existing;
+    const p = new Promise<void>((resolve) => {
+      this.consentQueue.push({ req: { appId, appName: manifest.name, scope }, resolve });
+      if (!this.consent.get()) this.consent.set(this.consentQueue[0]?.req ?? null);
+    }).finally(() => this.consentPending.delete(key));
+    this.consentPending.set(key, p);
+    return p;
+  }
+
+  /** Called by the consent sheet. Decision is stored before the waiting call is re-checked. */
+  decideConsent(decision: Decision | 'dismiss'): void {
+    const head = this.consentQueue.shift();
+    if (!head) return;
+    if (decision !== 'dismiss') this.grants.set(head.req.appId, head.req.scope, decision);
+    log.info('consent.decided', { appId: head.req.appId, scope: head.req.scope, decision });
+    head.resolve();
+    this.consent.set(this.consentQueue[0]?.req ?? null);
+  }
+
+  /** The app went away while its sheet was queued: answer "not now" (no decision recorded). */
+  private dismissConsent(appId: string): void {
+    const keep: typeof this.consentQueue = [];
+    for (const q of this.consentQueue) {
+      if (q.req.appId === appId) q.resolve();
+      else keep.push(q);
+    }
+    this.consentQueue = keep;
+    if (this.consent.get()?.appId === appId) this.consent.set(keep[0]?.req ?? null);
+  }
+
+  /** Settings → Permissions: forget a decision and end the app's session so it takes effect now. */
+  resetGrant(appId: string, scope: string): void {
+    this.grants.delete(appId, scope);
+    log.info('consent.reset', { appId, scope });
+    if (this.lifecycle.get(appId)?.state === 'active' || this.lifecycle.get(appId)?.state === 'suspended') {
+      this.lifecycle.close(appId, 'permission_revoked');
+      this.onAppClosed(appId);
+    }
   }
 
   statuses(fn: (s: readonly AppStatus[]) => void): () => void {

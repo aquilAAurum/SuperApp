@@ -158,6 +158,33 @@ describe('contacts subapp collections (SA-2026-007)', () => {
   });
 });
 
+describe('eatwell subapp collections (SA-2026-008)', () => {
+  const op = (collection: string, recordId: string, o: string, payload?: Record<string, unknown>, baseVersion?: number) =>
+    api('/api/sa/ops', { token: user, body: { opId: opId(), collection, recordId, op: o, ...(payload ? { payload } : {}), ...(baseVersion ? { baseVersion } : {}) } });
+
+  it('take diary entries, weights, water and settings through ops, versioned and owner-only', async () => {
+    const e = rid();
+    const created = await op('eatwell_entries', e, 'create', { date: '2026-11-28', meal: 'breakfast', name: 'Banana', servings: 2, serving_label: '1 medium (118 g)', food_ref: 'b:banana', kcal: 210, protein_g: 2.6, carbs_g: 54 });
+    expect(created.status).toBe(200);
+    expect(created.body.record).toMatchObject({ id: e, version: 1, kcal: 210, meal: 'breakfast' });
+    const updated = await op('eatwell_entries', e, 'update', { servings: 1, kcal: 105 }, 1);
+    expect(updated.body.record).toMatchObject({ version: 2, kcal: 105 });
+    expect((await op('eatwell_weights', rid(), 'create', { date: '2026-11-28', kg: 85.2 })).status).toBe(200);
+    expect((await op('eatwell_water', rid(), 'create', { date: '2026-11-28', ml: 250 })).status).toBe(200);
+    expect((await op('eatwell_settings', rid(), 'create', { units: 'imperial', rate_kg_week: -0.5, protein_pct: 30, carbs_pct: 40, fat_pct: 30, exercise_adds: true })).status).toBe(200);
+    const direct = await api('/api/collections/eatwell_entries/records', { token: user, body: { date: '2026-11-28', meal: 'lunch', name: 'x', owner: userId, version: 1 } });
+    expect(direct.status).toBe(403);
+    const anon = await api('/api/collections/eatwell_entries/records');
+    expect(anon.body.totalItems ?? 0).toBe(0);
+  });
+
+  it('reject malformed diary records', async () => {
+    expect((await op('eatwell_entries', rid(), 'create', { date: '28/11/2026', meal: 'breakfast', name: 'Bad date' })).status).toBe(400);
+    expect((await op('eatwell_entries', rid(), 'create', { date: '2026-11-28', meal: 'brunch', name: 'Bad meal' })).status).toBe(400);
+    expect((await op('eatwell_weights', rid(), 'create', { date: '2026-11-28', kg: 5000 })).status).toBe(400);
+  });
+});
+
 describe('access rules', () => {
   it('synced collections cannot be written directly by clients', async () => {
     const r = await api('/api/collections/core_people/records', { token: user, body: { displayName: 'Direct', owner: userId, version: 1 } });
