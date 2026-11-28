@@ -2,6 +2,7 @@
   import type { Shell, ShellState } from '../shell.ts';
   import { SHELL_VERSION } from '../shell.ts';
   import { showToast } from './store.ts';
+  import { scopeLabel } from './consent-copy.ts';
 
   const { shell, onBack, onSignedOut }: { shell: Shell; onBack: () => void; onSignedOut: () => void } = $props();
   // `shell` is a constant composition root and is never reassigned.
@@ -38,6 +39,29 @@
     } finally {
       checking = false;
       apps = rows();
+    }
+  }
+
+  type Grant = { appId: string; appName: string; scope: string; decision: string };
+  const grantRows = (): Grant[] =>
+    shell.grants
+      .entries()
+      .map((g) => ({ ...g, appName: shell.bundles.get(g.appId)?.manifest.name ?? g.appId }))
+      .sort((a, b) => a.appName.localeCompare(b.appName) || a.scope.localeCompare(b.scope));
+  let grants = $state<Grant[]>(grantRows());
+  $effect(() => shell.grants.onChange(() => (grants = grantRows())));
+  const DECISION: Record<string, string> = { allow: 'Allowed', allow_once: 'Allowed this session', deny: 'Not allowed' };
+
+  function reset(g: Grant) {
+    shell.resetGrant(g.appId, g.scope);
+    showToast(`${g.appName} will ask again next time it needs this.`);
+  }
+
+  async function openHealth() {
+    try {
+      await shell.broker.openHealthSettings();
+    } catch (err) {
+      showToast(`Couldn't open Health Connect: ${(err as Error).message}`, 'error');
     }
   }
 
@@ -87,12 +111,38 @@
   <p class="muted">Updates are pulled from your server when Supra opens and every 6 hours. An update applies the next time that app starts.</p>
 </section>
 
+<section class="section" aria-labelledby="perm-heading">
+  <h2 id="perm-heading">Permissions</h2>
+  {#if grants.length === 0}
+    <p class="muted">No app has asked for a permission yet.</p>
+  {:else}
+    <ul class="apps" data-testid="settings-permissions">
+      {#each grants as g (g.appId + g.scope)}
+        <li class="grant">
+          <span>{g.appName}: {scopeLabel(g.scope)} <span class="muted">· {DECISION[g.decision] ?? g.decision}</span></span>
+          <button type="button" onclick={() => reset(g)} aria-label={`Reset ${g.appName} ${scopeLabel(g.scope)}`}>Reset</button>
+        </li>
+      {/each}
+    </ul>
+  {/if}
+  {#if shell.broker.isNative}
+    <button type="button" onclick={openHealth}>Open Health Connect</button>
+    <p class="muted">Choose exactly which health data Supra may read or write, or revoke it.</p>
+  {/if}
+</section>
+
 <section class="section">
   <h2>About</h2>
   <p>~Supra~ shell {SHELL_VERSION}</p>
 </section>
 
 <style>
+  .grant {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+  }
   .apps {
     list-style: none;
     margin: 0 0 var(--space-3);

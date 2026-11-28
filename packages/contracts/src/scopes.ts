@@ -16,6 +16,9 @@ export const STATIC_SCOPES = [
   'device.location',
   'device.contacts.read',
   'device.haptics',
+  // Health Connect (ADR-010): read activity/body/nutrition; write only what the app itself logged.
+  'device.health.read',
+  'device.health.write',
   'home.read',
   'home.control',
   'media.read',
@@ -30,7 +33,6 @@ export const RESERVED_SCOPES = [
   'device.calllog.read',
   'device.sms.read',
   'device.usage.read',
-  'device.health.read',
 ] as const;
 
 export type StaticScope = (typeof STATIC_SCOPES)[number];
@@ -39,6 +41,8 @@ export type StaticScope = (typeof STATIC_SCOPES)[number];
 export const CONSENT_SCOPES: ReadonlySet<string> = new Set([
   'device.location',
   'device.contacts.read',
+  'device.health.read',
+  'device.health.write',
   'files.read',
   'files.write',
   'notify.post',

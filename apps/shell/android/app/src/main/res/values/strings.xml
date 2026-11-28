@@ -4,4 +4,5 @@
     <string name="title_activity_main">~Supra~</string>
     <string name="package_name">dev.superapp.shell</string>
     <string name="custom_url_scheme">dev.superapp.shell</string>
+    <string name="health_rationale">How Supra uses Health Connect\n\nSupra reads only the health data you allow (activity, calories burned, exercise, sleep, resting heart rate, weight, water and nutrition) and only when one of your Supra apps asks for it and you approved that app.\n\nSupra writes only what you log yourself: meals, weight and water.\n\nReadings stay on this phone and your own Supra server. They are never sent to anyone else, never used for advertising, and never written to logs.\n\nYou can change or revoke access any time in Health Connect, or in Supra → Settings → Permissions.</string>
 </resources>

@@ -4,13 +4,14 @@ import { MemoryGrantStore } from './permissions.ts';
 import { ShellError } from './types.ts';
 import { FakePort, manifest, quietLogger } from '../test-helpers.ts';
 
-function setup(opts: { now?: () => number } = {}) {
+function setup(opts: { now?: () => number; requestConsent?: ConstructorParameters<typeof BridgeRouter>[0]['requestConsent'] } = {}) {
   const { logger, lines } = quietLogger();
   const grants = new MemoryGrantStore();
   const router = new BridgeRouter({
     logger,
     grants,
     now: opts.now,
+    requestConsent: opts.requestConsent,
     handlers: {
       'app.getContext': ({ appId }) => ({ appId, route: '/', hosted: true }),
       'app.setTitle': () => {
@@ -72,6 +73,36 @@ describe('BridgeRouter', () => {
     r.grants.set('hello', 'device.contacts.read', 'allow');
     await r.port.deliver(r.req('device.contacts.list', {}));
     expect(r.last()).toMatchObject({ ok: true });
+  });
+
+  it('asks for consent once per undecided scope and honours the decision', async () => {
+    const asked: string[] = [];
+    const box: { grants?: MemoryGrantStore } = {};
+    let answer: 'allow' | 'deny' = 'deny';
+    const r = setup({
+      requestConsent: async (appId, _m, scope) => {
+        asked.push(`${appId}:${scope}`);
+        box.grants!.set(appId, scope, answer);
+      },
+    });
+    box.grants = r.grants;
+    await r.port.deliver(r.req('device.contacts.list', {}));
+    expect(r.last()).toMatchObject({ ok: false, error: { code: 'SCOPE_DENIED' } });
+    await r.port.deliver(r.req('device.contacts.list', {}));
+    expect(asked).toEqual(['hello:device.contacts.read']); // a remembered deny is not asked again
+    r.grants.delete('hello', 'device.contacts.read');
+    answer = 'allow';
+    await r.port.deliver(r.req('device.contacts.list', {}));
+    expect(r.last()).toMatchObject({ ok: true });
+    expect(asked).toHaveLength(2);
+  });
+
+  it('never asks for consent for undeclared scopes or unimplemented methods', async () => {
+    const asked: string[] = [];
+    const r = setup({ requestConsent: async (_a, _m, scope) => void asked.push(scope) });
+    await r.port.deliver(r.req('device.location', {}));
+    expect(r.last()).toMatchObject({ ok: false, error: { code: 'SCOPE_DENIED' } });
+    expect(asked).toEqual([]);
   });
 
   it('rejects malformed envelopes without crashing', async () => {

@@ -17,5 +17,7 @@ export interface Capabilities {
     network: boolean;
     camera: boolean;
     notifications: boolean;
+    /** Health Connect is installed and usable (ADR-010; absent on shells before API 1.1). */
+    health?: boolean;
   };
 }

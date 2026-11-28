@@ -45,9 +45,16 @@ const manifestPath = 'apps/shell/android/app/src/main/AndroidManifest.xml';
 if (existsSync(join(ROOT, manifestPath))) {
   const am = read(manifestPath);
   const allowed = new Set(['INTERNET', 'ACCESS_NETWORK_STATE', 'POST_NOTIFICATIONS', 'ACCESS_FINE_LOCATION', 'ACCESS_COARSE_LOCATION', 'READ_CONTACTS', 'VIBRATE', 'USE_BIOMETRIC']);
-  const declared = [...am.matchAll(/android:name="android\.permission\.([A-Z_]+)"/g)].map((m) => m[1]);
-  const extra = declared.filter((p) => !allowed.has(p));
-  check('AndroidManifest declares only v1 permissions', extra.length === 0, extra.join(', ') || declared.join(', '));
+  // Health Connect (ADR-010): exactly the permissions the contract maps to, nothing broader.
+  const { HEALTH_READ_PERMISSION, HEALTH_WRITE_PERMISSION } = await import('../packages/contracts/src/health.ts');
+  const health = new Set([...Object.values(HEALTH_READ_PERMISSION), ...Object.values(HEALTH_WRITE_PERMISSION)].map((p) => `health.${p}`));
+  // Every <uses-permission>, whatever its namespace (android.permission.health.* included).
+  const declared = [...am.matchAll(/<uses-permission[^>]*android:name="([^"]+)"/g)].map((m) => m[1].replace(/^android\.permission\./, ''));
+  const extra = declared.filter((p) => !allowed.has(p) && !health.has(p));
+  check('AndroidManifest declares only v1 permissions (+ ADR-010 Health Connect)', extra.length === 0, extra.join(', ') || declared.join(', '));
+  const missingHealth = [...health].filter((p) => !declared.includes(p));
+  check('Health Connect permissions match the contract (ADR-010)', missingHealth.length === 0, missingHealth.join(', '));
+  check('Health Connect rationale activity declared (ADR-010)', /androidx\.health\.ACTION_SHOW_PERMISSIONS_RATIONALE/.test(am) && /android\.intent\.category\.HEALTH_PERMISSIONS/.test(am));
   check('Android backups disabled (secrets stay in Keystore)', /android:allowBackup="false"/.test(am));
   check('Cleartext traffic disabled (network_security_config)', !/usesCleartextTraffic="true"/.test(am) && /cleartextTrafficPermitted="false"/.test(read('apps/shell/android/app/src/main/res/xml/network_security_config.xml')));
 }

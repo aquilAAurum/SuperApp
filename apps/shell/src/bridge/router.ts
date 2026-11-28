@@ -7,6 +7,7 @@ import {
   parseRequest,
   type ErrorCode,
   type EventEnvelope,
+  type Manifest,
   type MethodName,
   type ResponseEnvelope,
 } from '@superapp/contracts';
@@ -26,6 +27,11 @@ export interface RouterOptions {
   now?: () => number;
   /** Called after a session ends (subscriptions are dropped there). */
   onDetach?: (appId: string) => void;
+  /**
+   * Shows the consent sheet for a consent-gated scope the app has no decision for, and records the
+   * owner's choice in `grants` before resolving. Without it such calls answer SCOPE_DENIED.
+   */
+  requestConsent?: (appId: string, manifest: Manifest, scope: string) => Promise<void>;
 }
 
 /**
@@ -124,7 +130,13 @@ export class BridgeRouter {
     const scopes = spec.scopes(req.params, session.appId);
     if (scopes === null) return fail('SCOPE_DENIED', `${method} is not allowed for these params.`);
     for (const scope of scopes) {
-      const check = checkScope(session.manifest, scope, this.opts.grants);
+      let check = checkScope(session.manifest, scope, this.opts.grants);
+      if (!check.ok && check.reason === 'consent_required' && this.opts.requestConsent && this.opts.handlers[method]) {
+        // Spec grant flow step 3: ask the owner, then re-check (the sheet records the decision).
+        await this.opts.requestConsent(session.appId, session.manifest, scope);
+        if (this.sessions.get(session.appId) !== session) return; // closed while the sheet was open
+        check = checkScope(session.manifest, scope, this.opts.grants);
+      }
       if (!check.ok) return fail('SCOPE_DENIED', `Scope ${scope}: ${check.reason}.`);
     }
     if (scopes.includes('data.own')) {

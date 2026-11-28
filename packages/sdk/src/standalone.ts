@@ -15,6 +15,8 @@ export class StandaloneTransport implements Transport {
   private listeners: ((msg: unknown) => void)[] = [];
   private records = new Map<string, Map<string, Record<string, unknown>>>();
   private handlers: Record<string, Handler>;
+  private hcRead: string[] = [];
+  private hcWrite: string[] = [];
 
   constructor(appId: string, overrides: Record<string, Handler> = {}) {
     const table = (c: unknown) => {
@@ -31,7 +33,7 @@ export class StandaloneTransport implements Transport {
       },
       'app.close': () => ({}),
       'app.getContext': () => ({ appId, route: '/', hosted: false }),
-      'sys.capabilities': () => ({ apiVersion: '1.0', shellVersion: 'standalone', formFactor: 'phone', platform: 'web', methods: Object.keys(this.handlers), device: { location: false, contacts: false, haptics: false, battery: false, network: false, camera: false, notifications: false } }),
+      'sys.capabilities': () => ({ apiVersion: '1.1', shellVersion: 'standalone', formFactor: 'phone', platform: 'web', methods: Object.keys(this.handlers), device: { location: false, contacts: false, haptics: false, battery: false, network: false, camera: false, notifications: false, health: true } }),
       'sys.log': (p) => {
         console.log(JSON.stringify({ ts: new Date().toISOString(), appId, ...p }));
         return {};
@@ -54,6 +56,37 @@ export class StandaloneTransport implements Transport {
       'data.delete': (p) => ({ deleted: table(p.collection).delete(String(p.id)), pending: false }),
       'data.subscribe': () => ({ subscriptionId: 'standalone' }),
       'data.unsubscribe': () => ({ ok: true }),
+      'device.haptics': () => ({}),
+      // Dev mock for Health Connect: stable fake activity per day so screens are usable in a browser.
+      'device.health.status': () => ({ available: true, granted: { read: this.hcRead, write: this.hcWrite } }),
+      'device.health.request': (p) => {
+        this.hcRead = [...new Set([...this.hcRead, ...((p.read as string[]) ?? [])])];
+        this.hcWrite = [...new Set([...this.hcWrite, ...((p.write as string[]) ?? [])])];
+        return { available: true, granted: { read: this.hcRead, write: this.hcWrite } };
+      },
+      'device.health.read': (p) => {
+        const metrics = p.metrics as string[];
+        const start = new Date(String(p.start));
+        const end = new Date(String(p.end));
+        const days: { start: Date; end: Date }[] = [];
+        if (p.bucket === 'none') days.push({ start, end });
+        else for (let d = new Date(start); d < end; d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1)) days.push({ start: d, end: new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1) });
+        const fake = (m: string, t: Date) => {
+          const seed = Math.abs(Math.sin(Math.floor(t.getTime() / 864e5) * 9301 + m.length * 49297));
+          return ({ steps: 3000 + seed * 9000, distance: 2500 + seed * 6000, activeCalories: 150 + seed * 450, totalCalories: 1900 + seed * 700, exerciseMinutes: seed * 60, sleepMinutes: 360 + seed * 120, restingHeartRate: 58 + seed * 8 } as Record<string, number>)[m];
+        };
+        const granted = metrics.filter((m) => this.hcRead.includes(m));
+        return {
+          buckets: days.map((d) => ({ start: d.start.toISOString(), end: d.end.toISOString(), values: Object.fromEntries(granted.map((m) => [m, fake(m, d.start)]).filter(([, v]) => v !== undefined).map(([m, v]) => [m, Math.round(Number(v))])) })),
+          missing: metrics.filter((m) => !this.hcRead.includes(m)),
+        };
+      },
+      'device.health.write': (p) => {
+        const recs = p.records as { type: string }[];
+        const ok = recs.filter((r) => this.hcWrite.includes(r.type));
+        return { written: ok.length, missing: [...new Set(recs.map((r) => r.type).filter((t) => !this.hcWrite.includes(t)))] };
+      },
+      'device.health.delete': (p) => ({ deleted: (p.clientIds as string[]).length }),
       ...overrides,
     };
   }
@@ -62,7 +95,7 @@ export class StandaloneTransport implements Transport {
     return Promise.resolve({
       type: 'welcome',
       sessionToken: 'standalone',
-      apiVersion: '1.0',
+      apiVersion: '1.1',
       grantedScopes: [],
       user: null,
       device: { id: null, kind: 'phone', name: 'Browser (standalone)' },

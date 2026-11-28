@@ -7,13 +7,62 @@ export interface GrantStore {
   get(appId: string, scope: string): Decision | undefined;
 }
 
+export interface GrantEntry {
+  appId: string;
+  scope: string;
+  decision: Decision;
+}
+
+/**
+ * Per-app scope decisions. "Allow" and "Deny" are remembered (the shell persists `toJSON()` and
+ * restores it with `load()`); "Allow once" lasts until the app's session ends (`endSession`).
+ * Mirroring to the server `grants` collection arrives with the rest of M4.
+ */
 export class MemoryGrantStore implements GrantStore {
   private map = new Map<string, Decision>();
+  private listeners = new Set<() => void>();
+  private key = (appId: string, scope: string) => `${appId}\u0000${scope}`;
+
   set(appId: string, scope: string, d: Decision): void {
-    this.map.set(`${appId}\u0000${scope}`, d);
+    this.map.set(this.key(appId, scope), d);
+    this.changed();
   }
   get(appId: string, scope: string): Decision | undefined {
-    return this.map.get(`${appId}\u0000${scope}`);
+    return this.map.get(this.key(appId, scope));
+  }
+  /** Forget a decision so the consent sheet asks again (Settings → Permissions → Reset). */
+  delete(appId: string, scope: string): void {
+    if (this.map.delete(this.key(appId, scope))) this.changed();
+  }
+  entries(): GrantEntry[] {
+    return [...this.map].map(([k, decision]) => {
+      const [appId = '', scope = ''] = k.split('\u0000');
+      return { appId, scope, decision };
+    });
+  }
+  /** Drops "Allow once" decisions for an app whose session ended. */
+  endSession(appId: string): void {
+    let changed = false;
+    for (const e of this.entries()) if (e.appId === appId && e.decision === 'allow_once') changed = this.map.delete(this.key(e.appId, e.scope)) || changed;
+    if (changed) this.changed();
+  }
+  /** Remembered decisions only; "Allow once" is never persisted. */
+  toJSON(): GrantEntry[] {
+    return this.entries().filter((e) => e.decision !== 'allow_once');
+  }
+  load(entries: unknown): void {
+    if (!Array.isArray(entries)) return;
+    for (const e of entries as Partial<GrantEntry>[]) {
+      if (typeof e?.appId === 'string' && typeof e.scope === 'string' && (e.decision === 'allow' || e.decision === 'deny')) this.map.set(this.key(e.appId, e.scope), e.decision);
+    }
+    this.changed();
+  }
+  onChange(fn: () => void): () => void {
+    this.listeners.add(fn);
+    return () => this.listeners.delete(fn);
+  }
+  private changed(): void {
+    for (const l of this.listeners) l();
   }
 }
 
