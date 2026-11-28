@@ -177,8 +177,30 @@ export class SyncEngine {
     if (!tracked.includes(collection)) await this.store.setMeta('tracked', [...tracked, collection]);
   }
 
+  private refreshing = new Map<string, Promise<string[]>>();
+  private refreshedAt = new Map<string, number>();
+
+  /**
+   * Catch-up for one collection. One at a time per collection: a call while one is in flight joins
+   * it (a subapp paging a large collection used to start a full download per page). With
+   * `maxAgeMs`, a catch-up that finished that recently is reused instead of repeated (reads
+   * trigger catch-ups; realtime covers changes in between). Resume and subscribe pass no maxAge.
+   */
+  refresh(collection: string, opts: { maxAgeMs?: number } = {}): Promise<string[]> {
+    const inflight = this.refreshing.get(collection);
+    if (inflight) return inflight;
+    const at = this.refreshedAt.get(collection);
+    if (opts.maxAgeMs !== undefined && at !== undefined && this.now() - at < opts.maxAgeMs) return Promise.resolve([]);
+    const p = this.runRefresh(collection).finally(() => {
+      this.refreshing.delete(collection);
+      this.refreshedAt.set(collection, this.now());
+    });
+    this.refreshing.set(collection, p);
+    return p;
+  }
+
   /** Catch-up query for one collection (`updated > lastSyncAt`), merged into the mirror. */
-  async refresh(collection: string): Promise<string[]> {
+  private async runRefresh(collection: string): Promise<string[]> {
     await this.track(collection);
     if (!this.online) return [];
     try {

@@ -22,10 +22,13 @@ async function assertAppOwns(engine: SyncEngine, appId: string, collection: stri
   if (existing && existing[field] !== appId) throw new ShellError('SCOPE_DENIED', `${collection} record ${id} belongs to ${String(existing[field])}.`);
 }
 
+export const READ_REFRESH_MAX_AGE_MS = 10_000;
+
 /** M3 handlers: `data.*` (scopes and declared collections are checked by the router first). */
 export function dataHandlers(engine: SyncEngine): Partial<Record<MethodName, Handler>> {
   const str = (v: unknown) => String(v);
-  const refreshLater = (collection: string) => void engine.refresh(collection);
+  // Reads also pull from the server, but at most once per 10 s per collection (realtime covers the rest).
+  const refreshLater = (collection: string) => void engine.refresh(collection, { maxAgeMs: READ_REFRESH_MAX_AGE_MS });
   return {
     'data.list': async (_ctx, p) => {
       const res = await engine.data.list(str(p.collection), {

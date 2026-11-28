@@ -1,0 +1,41 @@
+{
+  "id": "contacts",
+  "name": "Contacts",
+  "version": "0.1.1",
+  "sdk": ">=1.0 <2.0",
+  "entry": "index.html",
+  "formFactors": [
+    "phone",
+    "tablet"
+  ],
+  "scopes": {
+    "required": [
+      "data.own",
+      "core.people.read"
+    ],
+    "optional": []
+  },
+  "collections": [
+    "contacts_entities",
+    "contacts_people",
+    "contacts_organizations",
+    "contacts_nodes",
+    "contacts_contact_points",
+    "contacts_key_dates",
+    "contacts_interactions",
+    "contacts_edges",
+    "contacts_mentions",
+    "contacts_enrichment",
+    "contacts_imports"
+  ],
+  "events": {
+    "emits": [],
+    "listens": []
+  },
+  "deepLinks": [],
+  "intents": [],
+  "car": null,
+  "background": {
+    "tasks": []
+  }
+}

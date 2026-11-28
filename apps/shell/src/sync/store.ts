@@ -46,9 +46,10 @@ export class SyncStore {
     return this.kv.get<MirrorEntry>('mirror', mirrorKey(collection, id));
   }
 
+  /** One collection's mirror entries, read by key range (not the whole mirror: that made data.list O(all data)). */
   async listEntries(collection: string): Promise<MirrorEntry[]> {
-    const all = await this.kv.list<MirrorEntry>('mirror');
-    return all.filter((e) => e.value.collection === collection).map((e) => e.value);
+    const rows = await this.kv.list<MirrorEntry>('mirror', mirrorKey(collection, ''));
+    return rows.filter((e) => e.value.collection === collection).map((e) => e.value);
   }
 
   async outbox(): Promise<OutboxRow[]> {
