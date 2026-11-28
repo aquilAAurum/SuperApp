@@ -1,5 +1,5 @@
 # Deploys migrations and hooks to the mini PC (spec §Server setup, step 3).
-# Run on the mini PC from a checkout of a tagged release:  pwsh tools/deploy-server.ps1
+# Run on the mini PC from a checkout of a tagged release:  powershell -ExecutionPolicy Bypass -File tools\deploy-server.ps1
 # Assumes PocketBase lives in C:\superapp\pocketbase and runs as the NSSM service "superapp-pocketbase".
 param(
   [string]$Target = 'C:\superapp\pocketbase',

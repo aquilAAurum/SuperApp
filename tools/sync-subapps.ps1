@@ -1,6 +1,6 @@
 # Mini PC side of subapp updates by pull (ADR-009). Run from the SuperApp checkout on the mini PC.
-#   pwsh tools/sync-subapps.ps1             pull main (fast-forward only), copy published/ to the inbox
-#   pwsh tools/sync-subapps.ps1 -Register   run that every 15 minutes (Windows scheduled task)
+#   powershell -ExecutionPolicy Bypass -File tools\sync-subapps.ps1             pull main (fast-forward only), copy published/ to the inbox
+#   powershell -ExecutionPolicy Bypass -File tools\sync-subapps.ps1 -Register   run that every 15 minutes (Windows scheduled task)
 # PocketBase imports new bundles from <Target>\subapps_inbox within a minute (server/pb_hooks/subapps.pb.js);
 # phones pull them from the server. Only bundles are copied: migrations and hooks still deploy
 # with tools/deploy-server.ps1, deliberately.
