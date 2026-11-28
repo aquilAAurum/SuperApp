@@ -202,10 +202,11 @@ describe('published subapps (ADR-009)', () => {
       expect(denied.status).toBeGreaterThanOrEqual(401); // owner token is not a superuser
       const r = await api('/api/sa/subapps/import', { method: 'POST', token: su });
       expect(r.status).toBe(200);
-      expect(r.body.imported).toEqual([`${id}@1.0.0`]);
-      expect(r.body.errors.map((e: { reason: string }) => e.reason).sort()).toEqual(['manifest id/version/entry do not match the file name', 'version not-a-version is not semantic (1.2.3)']);
+      // Other bundles may share the inbox (the Windows job syncs published/ first); check only ours.
+      expect(r.body.imported.filter((x: string) => x.startsWith(`${id}@`))).toEqual([`${id}@1.0.0`]);
+      expect(r.body.errors.filter((e: { path: string }) => e.path.startsWith(`${id}/`)).map((e: { reason: string }) => e.reason).sort()).toEqual(['manifest id/version/entry do not match the file name', 'version not-a-version is not semantic (1.2.3)']);
       const again = await api('/api/sa/subapps/import', { method: 'POST', token: su });
-      expect(again.body.imported).toEqual([]);
+      expect(again.body.imported.filter((x: string) => x.startsWith(`${id}@`))).toEqual([]);
 
       const list = await api(`/api/collections/subapps/records?filter=${encodeURIComponent(`appId = "${id}"`)}`, { token: user });
       expect(list.status).toBe(200);

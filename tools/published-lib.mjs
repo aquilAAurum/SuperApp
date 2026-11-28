@@ -14,10 +14,10 @@ export const KEEP_VERSIONS = 2;
 /** Versions published for one app, oldest first. */
 export function publishedVersions(dir, id) {
   if (!existsSync(dir)) return [];
-  const re = new RegExp(`^${id}-(.+)\\.zip$`);
+  const prefix = `${id}-`;
   return readdirSync(dir)
-    .map((f) => re.exec(f)?.[1])
-    .filter(Boolean)
+    .filter((f) => f.startsWith(prefix) && f.endsWith('.zip') && f.length > prefix.length + 4)
+    .map((f) => f.slice(prefix.length, -'.zip'.length))
     .sort(compareVersions);
 }
 
